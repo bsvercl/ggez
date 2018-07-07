@@ -1,8 +1,11 @@
 use context::DebugId;
-use gfx::traits::FactoryExt;
 use graphics::*;
 use lyon;
 use lyon::tessellation as t;
+use std::sync::Arc;
+use vulkano::buffer::{BufferUsage, ImmutableBuffer};
+use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::pipeline::GraphicsPipelineAbstract;
 
 pub use self::t::{FillOptions, FillRule, LineCap, LineJoin, StrokeOptions};
 
@@ -264,10 +267,8 @@ impl MeshBuilder {
         self
     }
 
-
     /// Create a new mesh for a rectangle.
-    pub fn rectangle(&mut self, mode: DrawMode, bounds: Rect) -> &mut Self
-    {
+    pub fn rectangle(&mut self, mode: DrawMode, bounds: Rect) -> &mut Self {
         {
             let buffers = &mut self.buffer;
             let rect = t::math::rect(bounds.x, bounds.y, bounds.w, bounds.h);
@@ -278,37 +279,20 @@ impl MeshBuilder {
                     // GeometryBuilder<FillVertex>
                     let builder = &mut t::BuffersBuilder::new(buffers, VertexBuilder);
                     let fill_options = t::FillOptions::default();
-                    let _ = t::basic_shapes::fill_rectangle(
-                        &rect,
-                        &fill_options,
-                        builder,
-                    );
+                    let _ = t::basic_shapes::fill_rectangle(&rect, &fill_options, builder);
                 }
                 DrawMode::Line(line_width) => {
                     let builder = &mut t::BuffersBuilder::new(buffers, VertexBuilder);
-                    let options = t::StrokeOptions::default()
-                        .with_line_width(line_width);
-                    let _ = t::basic_shapes::stroke_rectangle(
-                        &rect,
-                        &options,
-                        builder,
-                    );
+                    let options = t::StrokeOptions::default().with_line_width(line_width);
+                    let _ = t::basic_shapes::stroke_rectangle(&rect, &options, builder);
                 }
                 DrawMode::CustomFill(fill_options) => {
                     let builder = &mut t::BuffersBuilder::new(buffers, VertexBuilder);
-                    let _ = t::basic_shapes::fill_rectangle(
-                        &rect,
-                        &fill_options,
-                        builder,
-                    );
+                    let _ = t::basic_shapes::fill_rectangle(&rect, &fill_options, builder);
                 }
                 DrawMode::CustomLine(options) => {
                     let builder = &mut t::BuffersBuilder::new(buffers, VertexBuilder);
-                    let _ = t::basic_shapes::stroke_rectangle(
-                        &rect,
-                        &options,
-                        builder,
-                    );
+                    let _ = t::basic_shapes::stroke_rectangle(&rect, &options, builder);
                 }
             };
         }
@@ -366,15 +350,24 @@ impl MeshBuilder {
     /// Takes the accumulated geometry and load it into GPU memory,
     /// creating a single `Mesh`.
     pub fn build(&self, ctx: &mut Context) -> GameResult<Mesh> {
-        let (vbuf, slice) = ctx.gfx_context
-            .factory
-            .create_vertex_buffer_with_slice(&self.buffer.vertices[..], &self.buffer.indices[..]);
+        let gfx = &mut ctx.gfx_context;
+
+        let (vertex_buffer, _) = ImmutableBuffer::from_iter(
+            self.buffer.vertices.iter().cloned(),
+            BufferUsage::vertex_buffer(),
+            gfx.queue.clone(),
+        ).unwrap();
+        let (index_buffer, _) = ImmutableBuffer::from_iter(
+            self.buffer.indices.iter().cloned(),
+            BufferUsage::index_buffer(),
+            gfx.queue.clone(),
+        ).unwrap();
 
         Ok(Mesh {
-            buffer: vbuf,
-            slice,
-            blend_mode: None,
-            debug_id: DebugId::get(ctx),
+            vertex_buffer,
+            index_buffer,
+            // blend_mode: None,
+            // debug_id: DebugId::get(ctx),
         })
     }
 }
@@ -384,8 +377,8 @@ struct VertexBuilder;
 impl t::VertexConstructor<t::FillVertex, Vertex> for VertexBuilder {
     fn new_vertex(&mut self, vertex: t::FillVertex) -> Vertex {
         Vertex {
-            pos: [vertex.position.x, vertex.position.y],
-            uv: [0.0, 0.0],
+            position: [vertex.position.x, vertex.position.y],
+            texcoord: [0.0, 0.0],
         }
     }
 }
@@ -393,8 +386,8 @@ impl t::VertexConstructor<t::FillVertex, Vertex> for VertexBuilder {
 impl t::VertexConstructor<t::StrokeVertex, Vertex> for VertexBuilder {
     fn new_vertex(&mut self, vertex: t::StrokeVertex) -> Vertex {
         Vertex {
-            pos: [vertex.position.x, vertex.position.y],
-            uv: [0.0, 0.0],
+            position: [vertex.position.x, vertex.position.y],
+            texcoord: [0.0, 0.0],
         }
     }
 }
@@ -403,12 +396,12 @@ impl t::VertexConstructor<t::StrokeVertex, Vertex> for VertexBuilder {
 ///
 /// All of its creation methods are just shortcuts for doing the same operation
 /// via a `MeshBuilder`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Mesh {
-    buffer: gfx::handle::Buffer<gfx_device_gl::Resources, Vertex>,
-    slice: gfx::Slice<gfx_device_gl::Resources>,
-    blend_mode: Option<BlendMode>,
-    debug_id: DebugId,
+    vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
+    index_buffer: Arc<ImmutableBuffer<[u16]>>,
+    // blend_mode: Option<BlendMode>,
+    // debug_id: DebugId,
 }
 
 impl Mesh {
@@ -476,13 +469,11 @@ impl Mesh {
     }
 
     /// Create a new mesh for a rectangle
-    pub fn new_rectangle(ctx: &mut Context, mode: DrawMode, bounds: Rect) -> GameResult<Mesh>
-    {
+    pub fn new_rectangle(ctx: &mut Context, mode: DrawMode, bounds: Rect) -> GameResult<Mesh> {
         let mut mb = MeshBuilder::new();
         let _ = mb.rectangle(mode, bounds);
         mb.build(ctx)
     }
-
 
     /// Create a new `Mesh` from a raw list of triangles.
     pub fn from_triangles<P>(ctx: &mut Context, triangles: &[P]) -> GameResult<Mesh>
@@ -498,26 +489,53 @@ impl Mesh {
 impl Drawable for Mesh {
     fn draw<D>(&self, ctx: &mut Context, param: D) -> GameResult
     where
-        D: Into<DrawTransform> {
+        D: Into<DrawTransform>,
+    {
         let param = param.into();
-        self.debug_id.assert(ctx);
+        // self.debug_id.assert(ctx);
         let gfx = &mut ctx.gfx_context;
-        gfx.update_instance_properties(param)?;
 
-        gfx.data.vbuf = self.buffer.clone();
-        let texture = gfx.white_image.texture.clone();
+        let uniform_buffer = gfx.uniform_buffer_pool
+            .next(vs::ty::Globals {
+                mvp: (gfx.projection * param.matrix).into(),
+            })
+            .unwrap();
 
-        let typed_thingy = gfx.backend_spec.raw_to_typed_shader_resource(texture);
-        gfx.data.tex.0 = typed_thingy;
+        let descriptor_set = gfx.descriptor_pool
+            .next()
+            .add_buffer(uniform_buffer)
+            .unwrap()
+            .add_sampled_image(gfx.white_image.texture.clone(), gfx.default_sampler.clone())
+            .unwrap()
+            .build()
+            .unwrap();
 
-        gfx.draw(Some(&self.slice))?;
+        let secondary_command_buffer = Arc::new(
+            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+                gfx.device.clone(),
+                gfx.queue.family(),
+                gfx.pipeline.clone().subpass(),
+            ).unwrap()
+                .draw_indexed(
+                    gfx.pipeline.clone(),
+                    gfx.dynamic_state(),
+                    vec![self.vertex_buffer.clone()],
+                    self.index_buffer.clone(),
+                    descriptor_set,
+                    (),
+                )
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
+        gfx.add_secondary_command_buffer(secondary_command_buffer.clone());
 
         Ok(())
     }
-    fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
-        self.blend_mode = mode;
-    }
-    fn get_blend_mode(&self) -> Option<BlendMode> {
-        self.blend_mode
-    }
+    // fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
+    //     self.blend_mode = mode;
+    // }
+    // fn get_blend_mode(&self) -> Option<BlendMode> {
+    //     self.blend_mode
+    // }
 }

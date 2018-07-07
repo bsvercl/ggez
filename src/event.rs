@@ -10,14 +10,13 @@
 //! different versions of ggez (for instance, we may someday get rid of SDL2),
 //! but trying to wrap it
 //! up more conveniently really ends up with the exact same interface.
-//! 
+//!
 //! TODO: UPDATE DOCS!
 //!
 //! See the `eventloop` example for an implementation.
 
 use gilrs;
 use winit;
-use winit::dpi;
 
 pub use input::keyboard::{KeyCode, KeyMods};
 /// A mouse button.
@@ -84,8 +83,7 @@ pub trait EventHandler {
 
     /// The mouse was moved; it provides both absolute x and y coordinates in the window,
     /// and relative x and y coordinates compared to its last position.
-    fn mouse_motion_event(&mut self, _ctx: &mut Context, _x: f32, _y: f32, _dx: f32, _dy: f32) {
-    }
+    fn mouse_motion_event(&mut self, _ctx: &mut Context, _x: f32, _y: f32, _dx: f32, _dy: f32) {}
 
     /// The mousewheel was scrolled, vertically (y, positive away from and negative toward the user)
     /// or horizontally (x, positive to the right and negative to the left).
@@ -154,10 +152,10 @@ where
             ctx.process_event(&event);
             match event {
                 Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(dpi::LogicalSize{width, height}) => {
-                        state.resize_event(ctx, width, height);
+                    WindowEvent::Resized(width, height) => {
+                        state.resize_event(ctx, width as f64, height as f64);
                     }
-                    WindowEvent::CloseRequested => {
+                    WindowEvent::Closed => {
                         if !state.quit_event(ctx) {
                             ctx.quit();
                         }
@@ -192,11 +190,11 @@ where
                         ..
                     } => {
                         state.key_up_event(ctx, keycode, modifiers.into());
-                    },
+                    }
                     WindowEvent::MouseWheel { delta, .. } => {
                         let (x, y) = match delta {
                             MouseScrollDelta::LineDelta(x, y) => (x, y),
-                            MouseScrollDelta::PixelDelta(dpi::LogicalPosition{x, y}) => (x as f32, y as f32),
+                            MouseScrollDelta::PixelDelta(x, y) => (x as f32, y as f32),
                         };
                         state.mouse_wheel_event(ctx, x, y);
                     }
@@ -222,7 +220,7 @@ where
                     }
                     x => {
                         trace!("ignoring window event {:?}", x);
-                    },
+                    }
                 },
                 Event::DeviceEvent { event, .. } => match event {
                     _ => (),

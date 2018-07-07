@@ -1,5 +1,4 @@
 use winit;
-use winit::dpi;
 
 use std::fmt;
 
@@ -7,11 +6,10 @@ use audio;
 use conf;
 use event::winit_event;
 use filesystem::Filesystem;
-use input::{gamepad, keyboard, mouse};
 use graphics::{self, Point2};
+use input::{gamepad, keyboard, mouse};
 use timer;
 use GameResult;
-
 
 /// A `Context` is an object that holds on to global resources.
 /// It basically tracks hardware state such as the screen, audio
@@ -65,18 +63,15 @@ impl Context {
         let audio_context = audio::AudioContext::new()?;
         let events_loop = winit::EventsLoop::new();
         let timer_context = timer::TimeContext::new();
-        let backend_spec = graphics::GlBackendSpec::from(conf.backend);
         let graphics_context = graphics::GraphicsContext::new(
             &events_loop,
             &conf.window_setup,
             conf.window_mode,
-            backend_spec,
             debug_id,
         )?;
         let mouse_context = mouse::MouseContext::new();
         let keyboard_context = keyboard::KeyboardContext::new();
         let gamepad_context = gamepad::GamepadContext::new()?;
-
 
         let ctx = Context {
             conf,
@@ -138,20 +133,16 @@ impl Context {
     pub fn process_event(&mut self, event: &winit::Event) {
         match event {
             winit_event::Event::WindowEvent { event, .. } => match event {
-                winit_event::WindowEvent::Resized(_) => {
+                winit_event::WindowEvent::Resized(_, _) => {
                     self.gfx_context.resize_viewport();
                 }
                 winit_event::WindowEvent::CursorMoved {
-                    position: dpi::LogicalPosition{x, y}, ..
+                    position: (x, y), ..
                 } => {
                     self.mouse_context
                         .set_last_position(Point2::new(*x as f32, *y as f32));
                 }
-                winit_event::WindowEvent::MouseInput {
-                    button,
-                    state,
-                    ..
-                } => {
+                winit_event::WindowEvent::MouseInput { button, state, .. } => {
                     let pressed = match *state {
                         winit_event::ElementState::Pressed => true,
                         winit_event::ElementState::Released => false,
@@ -278,7 +269,7 @@ static DEBUG_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 /// This is a type that contains a unique ID for each Context and
 /// is contained in each thing created from the Context which
 /// becomes invalid when the Context goes away (for example, Image because
-/// it contains texture handles).  When compiling without assertions 
+/// it contains texture handles).  When compiling without assertions
 /// (in release mode) it is replaced with a zero-size type, compiles
 /// down to nothing, disappears entirely with a puff of optimization logic.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

@@ -94,21 +94,14 @@
 //! If you still have problems, feel free to [open an issue](https://github.com/ggez/ggez/issues) or say hi in the `#rust-gamedev` IRC channel on the `irc.mozilla.org` server.
 
 #![deny(missing_docs)]
-#![deny(missing_debug_implementations)]
-#![deny(unused_results)]
+// #![deny(missing_debug_implementations)]
+// #![deny(unused_results)]
 #![warn(bare_trait_objects)]
 #![warn(missing_copy_implementations)]
-
 
 #[macro_use]
 extern crate bitflags;
 extern crate app_dirs2;
-#[macro_use]
-extern crate gfx;
-extern crate gfx_device_gl;
-extern crate gfx_glyph;
-extern crate gfx_window_glutin;
-extern crate glutin;
 extern crate image;
 #[macro_use]
 extern crate log;
@@ -123,6 +116,11 @@ extern crate smart_default;
 extern crate gilrs;
 extern crate toml;
 extern crate winit;
+#[macro_use]
+extern crate vulkano;
+#[macro_use]
+extern crate vulkano_shader_derive;
+extern crate vulkano_win;
 extern crate zip;
 
 pub mod audio;

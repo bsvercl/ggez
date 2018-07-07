@@ -126,8 +126,7 @@ where
     P: Into<mint::Point2<f32>>,
 {
     fn from(location: (P,)) -> Self {
-        DrawParam::new().dest(location.0)
-        .into()
+        DrawParam::new().dest(location.0).into()
     }
 }
 
@@ -263,22 +262,21 @@ impl DrawTransform {
         }
     }
 
-
-    pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
-        let mat: [[f32; 4]; 4] = self.matrix.into();
-        let color: [f32;4] = if srgb {
-            let linear_color: types::LinearColor = self.color.into();
-            linear_color.into()
-        } else {
-            self.color.into()
-        };
-        InstanceProperties {
-            src: self.src.into(),
-            col1: mat[0],
-            col2: mat[1],
-            col3: mat[2],
-            col4: mat[3],
-            color: color,
-        }
-    }
+    // pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
+    //     let mat: [[f32; 4]; 4] = self.matrix.into();
+    //     let color: [f32; 4] = if srgb {
+    //         let linear_color: types::LinearColor = self.color.into();
+    //         linear_color.into()
+    //     } else {
+    //         self.color.into()
+    //     };
+    //     InstanceProperties {
+    //         src: self.src.into(),
+    //         col1: mat[0],
+    //         col2: mat[1],
+    //         col3: mat[2],
+    //         col4: mat[3],
+    //         color: color,
+    //     }
+    // }
 }

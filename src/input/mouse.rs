@@ -1,12 +1,11 @@
 //! Mouse utility functions.
 
-use std::collections::HashMap;
-use GameError;
 use context::Context;
 use graphics;
 use graphics::Point2;
+use std::collections::HashMap;
 pub use winit::{MouseButton, MouseCursor};
-use winit::dpi;
+use GameError;
 use GameResult;
 
 /// Stores state information for the mouse,
@@ -15,10 +14,10 @@ use GameResult;
 pub struct MouseContext {
     last_position: Point2,
     last_delta: Point2,
-    buttons_pressed:  HashMap<MouseButton, bool>,
+    buttons_pressed: HashMap<MouseButton, bool>,
     cursor_type: MouseCursor,
     cursor_grabbed: bool,
-    cursor_hidden: bool
+    cursor_hidden: bool,
 }
 
 impl MouseContext {
@@ -75,9 +74,10 @@ pub fn get_cursor_grabbed(ctx: &Context) -> bool {
 /// Set whether or not the mouse is grabbed (confined to the window)
 pub fn set_cursor_grabbed(ctx: &mut Context, grabbed: bool) -> GameResult<()> {
     ctx.mouse_context.cursor_grabbed = grabbed;
-    graphics::get_window(ctx)
-        .grab_cursor(grabbed)
-        .map_err(|e| GameError::WindowError(e.to_string()))
+    // graphics::get_window(ctx)
+    //     .grab_cursor(grabbed)
+    //     .map_err(|e| GameError::WindowError(e.to_string()))
+    unimplemented!()
 }
 
 /// Set whether or not the mouse is hidden (invisible)
@@ -88,8 +88,8 @@ pub fn get_cursor_hidden(ctx: &Context) -> bool {
 /// Set whether or not the mouse is hidden (invisible).
 pub fn set_cursor_hidden(ctx: &mut Context, hidden: bool) {
     ctx.mouse_context.cursor_hidden = hidden;
-    graphics::get_window(ctx)
-        .hide_cursor(hidden)
+    // graphics::get_window(ctx).hide_cursor(hidden)
+    unimplemented!()
 }
 
 /// Get the current position of the mouse cursor, in pixels.
@@ -104,10 +104,7 @@ pub fn get_position(ctx: &Context) -> Point2 {
 pub fn set_position(ctx: &mut Context, point: Point2) -> GameResult<()> {
     ctx.mouse_context.last_position = point;
     graphics::get_window(ctx)
-        .set_cursor_position(dpi::LogicalPosition {
-            x: point.x as f64, 
-            y: point.y as f64,
-        })
+        .set_cursor_position(point.x as i32, point.y as i32)
         .map_err(|_| GameError::WindowError("Couldn't set mouse cursor position!".to_owned()))
 }
 
@@ -115,7 +112,6 @@ pub fn set_position(ctx: &mut Context, point: Point2) -> GameResult<()> {
 pub fn get_delta(ctx: &Context) -> Point2 {
     ctx.mouse_context.last_delta
 }
-
 
 /// Returns whether or not the given mouse button is pressed.
 pub fn get_button_pressed(ctx: &Context, button: MouseButton) -> bool {

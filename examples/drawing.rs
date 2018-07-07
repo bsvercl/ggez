@@ -18,6 +18,7 @@ struct MainState {
     image1: graphics::Image,
     image2_linear: graphics::Image,
     image2_nearest: graphics::Image,
+    circle: graphics::Mesh,
     zoomlevel: f32,
 }
 
@@ -26,12 +27,16 @@ impl MainState {
         let image1 = graphics::Image::new(ctx, "/dragon1.png")?;
         let image2_linear = graphics::Image::new(ctx, "/shot.png")?;
         let mut image2_nearest = graphics::Image::new(ctx, "/shot.png")?;
-        image2_nearest.set_filter(graphics::FilterMode::Nearest);
+        // image2_nearest.set_filter(graphics::FilterMode::Nearest);
+        let circle = graphics::MeshBuilder::new()
+            .circle(graphics::DrawMode::Fill, [0.0, 00.0], 50.0, 0.01)
+            .build(ctx)?;
         let s = MainState {
             image1,
             image2_linear,
             image2_nearest,
             zoomlevel: 1.0,
+            circle,
         };
 
         Ok(s)
@@ -73,7 +78,7 @@ impl event::EventHandler for MainState {
         // let src = graphics::Rect::new(0.25, 0.25, 0.5, 0.5);
         // let src = graphics::Rect::one();
         let dst = cgmath::Point2::new(20.0, 20.0);
-        graphics::draw(ctx, &self.image1, (dst,))?;
+        // graphics::draw(ctx, &self.image1, (dst,))?;
         /*
         let dst = cgmath::Point2::new(200.0, 100.0);
         let dst2 = cgmath::Point2::new(400.0, 400.0);
@@ -121,6 +126,7 @@ impl event::EventHandler for MainState {
             DrawParam::new().color((0, 0, 255)),
         )?;
         */
+        graphics::draw(ctx, &self.circle, graphics::DrawParam::default())?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -139,7 +145,7 @@ pub fn main() -> GameResult {
         filesystem::mount(ctx, &path, true);
     }
 
-    println!("{}", graphics::get_renderer_info(ctx)?);
+    // println!("{}", graphics::get_renderer_info(ctx)?);
     let state = &mut MainState::new(ctx).unwrap();
     event::run(ctx, events_loop, state)
 }
