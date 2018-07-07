@@ -78,7 +78,7 @@ impl event::EventHandler for MainState {
         // let src = graphics::Rect::new(0.25, 0.25, 0.5, 0.5);
         // let src = graphics::Rect::one();
         let dst = cgmath::Point2::new(20.0, 20.0);
-        // graphics::draw(ctx, &self.image1, (dst,))?;
+        graphics::draw(ctx, &self.image1, (dst,))?;
         /*
         let dst = cgmath::Point2::new(200.0, 100.0);
         let dst2 = cgmath::Point2::new(400.0, 400.0);
