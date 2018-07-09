@@ -175,9 +175,7 @@ impl GraphicsContext {
 
         let pipeline = Arc::new(
             GraphicsPipeline::start()
-                // Please note that `OneVertexOneInstanceDefinition` is currently unstable as of `vulkano` 0.9
                 .vertex_input_single_buffer::<Vertex>()
-                // .vertex_input(OneVertexOneInstanceDefinition::<Vertex, InstanceProperties>::new())
                 .vertex_shader(vertex_shader.main_entry_point(), ())
                 .triangle_list()
                 .viewports_dynamic_scissors_irrelevant(1)
@@ -222,43 +220,43 @@ impl GraphicsContext {
             0.0,
         ).unwrap();
 
-        // let white_image = Image::make_raw(
-        //     queue.clone(),
-        //     sampler.clone(),
-        //     1,
-        //     1,
-        //     [255, 255, 255, 255].iter().cloned(),
-        //     swapchain.format(),
-        // )?;
+        let white_image = Image::make_raw(
+            queue.clone(),
+            sampler.clone(),
+            1,
+            1,
+            [255, 255, 255, 255].iter().cloned(),
+            swapchain.format(),
+        )?;
 
         // TODO: Workaround this. Use the above instead.
         // I really can't figure it out.
-        let white_image = {
-            use image;
-            use vulkano::image::ImmutableImage;
+        // let white_image = {
+        //     use image;
+        //     use vulkano::image::ImmutableImage;
 
-            let image = image::load_from_memory_with_format(
-                include_bytes!("../../resources/white.png"),
-                image::ImageFormat::PNG,
-            ).unwrap()
-                .to_rgba();
-            let (width, height) = image.dimensions();
-            let image_data = image.into_raw().clone();
+        //     let image = image::load_from_memory_with_format(
+        //         include_bytes!("../../resources/white.png"),
+        //         image::ImageFormat::PNG,
+        //     ).unwrap()
+        //         .to_rgba();
+        //     let (width, height) = image.dimensions();
+        //     let image_data = image.into_raw().clone();
 
-            let (texture, future) = ImmutableImage::from_iter(
-                image_data.iter().cloned(),
-                Dimensions::Dim2d { width, height },
-                swapchain.format(),
-                queue.clone(),
-            ).unwrap();
+        //     let (texture, future) = ImmutableImage::from_iter(
+        //         image_data.iter().cloned(),
+        //         Dimensions::Dim2d { width, height },
+        //         swapchain.format(),
+        //         queue.clone(),
+        //     ).unwrap();
 
-            Image {
-                texture,
-                sampler: sampler.clone(),
-                width,
-                height,
-            }
-        };
+        //     Image {
+        //         texture,
+        //         sampler: sampler.clone(),
+        //         width,
+        //         height,
+        //     }
+        // };
 
         Ok(GraphicsContext {
             secondary_command_buffers: vec![],
