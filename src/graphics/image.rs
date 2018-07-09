@@ -9,6 +9,7 @@ use vulkano::format::{AcceptsPixels, Format, FormatDesc};
 use vulkano::image::{Dimensions, ImageAccess, ImageViewAccess, ImmutableImage};
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::sampler::Sampler;
+use vulkano::sync::GpuFuture;
 
 use context::{Context, DebugId};
 use filesystem;
@@ -124,6 +125,11 @@ impl Image {
             format,
             queue.clone(),
         ).unwrap();
+        future
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
 
         Ok(Self {
             texture,
@@ -228,21 +234,7 @@ impl Drawable for Image {
         );
         let new_param = param.mul(Matrix4::new_nonuniform_scaling(&real_scale));
 
-        let uniform_buffer = gfx.uniform_buffer_pool
-            .next(vs::ty::Globals {
-                mvp: (gfx.projection * new_param.matrix).into(),
-            })
-            .unwrap();
-
-        let descriptor_set = gfx.descriptor_pool
-            .next()
-            .add_buffer(uniform_buffer)
-            .unwrap()
-            .add_sampled_image(self.texture.clone(), gfx.default_sampler.clone())
-            .unwrap()
-            .build()
-            .unwrap();
-
+        let descriptor = gfx.next_descriptor(new_param, Some(self.texture.clone()));
         let secondary_command_buffer = Arc::new(
             AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
                 gfx.device.clone(),
@@ -254,7 +246,7 @@ impl Drawable for Image {
                     gfx.dynamic_state(),
                     vec![gfx.quad_vertex_buffer.clone()],
                     gfx.quad_index_buffer.clone(),
-                    descriptor_set,
+                    descriptor,
                     (),
                 )
                 .unwrap()

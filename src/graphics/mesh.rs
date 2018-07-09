@@ -6,6 +6,7 @@ use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, ImmutableBuffer};
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::pipeline::GraphicsPipelineAbstract;
+use vulkano::sync::GpuFuture;
 
 pub use self::t::{FillOptions, FillRule, LineCap, LineJoin, StrokeOptions};
 
@@ -352,16 +353,22 @@ impl MeshBuilder {
     pub fn build(&self, ctx: &mut Context) -> GameResult<Mesh> {
         let gfx = &mut ctx.gfx_context;
 
-        let (vertex_buffer, _) = ImmutableBuffer::from_iter(
+        let (vertex_buffer, vertex_future) = ImmutableBuffer::from_iter(
             self.buffer.vertices.iter().cloned(),
             BufferUsage::vertex_buffer(),
             gfx.queue.clone(),
         ).unwrap();
-        let (index_buffer, _) = ImmutableBuffer::from_iter(
+        let (index_buffer, index_future) = ImmutableBuffer::from_iter(
             self.buffer.indices.iter().cloned(),
             BufferUsage::index_buffer(),
             gfx.queue.clone(),
         ).unwrap();
+        vertex_future
+            .join(index_future)
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
 
         Ok(Mesh {
             vertex_buffer,
@@ -498,21 +505,7 @@ impl Drawable for Mesh {
         // TODO: This is ugly, but you get the idea.
         // There is very similar code in `image.rs`.
 
-        let uniform_buffer = gfx.uniform_buffer_pool
-            .next(vs::ty::Globals {
-                mvp: (gfx.projection * param.matrix).into(),
-            })
-            .unwrap();
-
-        let descriptor_set = gfx.descriptor_pool
-            .next()
-            .add_buffer(uniform_buffer)
-            .unwrap()
-            .add_sampled_image(gfx.white_image.texture.clone(), gfx.default_sampler.clone())
-            .unwrap()
-            .build()
-            .unwrap();
-
+        let descriptor = gfx.next_descriptor(param, None);
         let secondary_command_buffer = Arc::new(
             AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
                 gfx.device.clone(),
@@ -524,7 +517,7 @@ impl Drawable for Mesh {
                     gfx.dynamic_state(),
                     vec![self.vertex_buffer.clone()],
                     self.index_buffer.clone(),
-                    descriptor_set,
+                    descriptor,
                     (),
                 )
                 .unwrap()

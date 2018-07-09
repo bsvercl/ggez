@@ -4,7 +4,7 @@ use vulkano::buffer::{BufferAccess, BufferUsage, CpuBufferPool, ImmutableBuffer}
 use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
 use vulkano::command_buffer::pool::{CommandPoolAlloc, StandardCommandPool};
 use vulkano::command_buffer::{
-    AutoCommandBuffer, AutoCommandBufferBuilder, CommandBuffer, DynamicState,
+    AutoCommandBuffer, AutoCommandBufferBuilder, CommandBuffer, DrawIndirectCommand, DynamicState,
 };
 use vulkano::descriptor::descriptor_set::{
     DescriptorSetDesc, FixedSizeDescriptorSet, FixedSizeDescriptorSetsPool,
@@ -17,11 +17,13 @@ use vulkano::image::{
     AttachmentImage, Dimensions, ImageAccess, ImageViewAccess, ImmutableImage, SwapchainImage,
 };
 use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
 use vulkano::pipeline::viewport::Viewport;
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
-use vulkano::sampler::Sampler;
+use vulkano::sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode};
 use vulkano::swapchain::{
-    self, AcquireError, PresentMode, Surface, SurfaceTransform, Swapchain, SwapchainCreationError,
+    self, AcquireError, PresentMode, Surface, SurfaceTransform, Swapchain, SwapchainAcquireFuture,
+    SwapchainCreationError,
 };
 use vulkano::sync::{self, GpuFuture};
 use vulkano_win::{self, VkSurfaceBuild};
@@ -43,7 +45,7 @@ pub(crate) struct GraphicsContext {
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     pub(crate) pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
-    previous_frame_end: Box<dyn GpuFuture>,
+    previous_frame_end: Option<Box<dyn GpuFuture>>,
     recreate_swapchain: bool,
     clear_color: [f32; 4],
     dimensions: [u32; 2],
@@ -58,7 +60,7 @@ pub(crate) struct GraphicsContext {
     pub(crate) descriptor_pool:
         FixedSizeDescriptorSetsPool<Arc<dyn GraphicsPipelineAbstract + Send + Sync>>,
     pub(crate) uniform_buffer_pool: CpuBufferPool<vs::ty::Globals>,
-
+    // pub(crate) index_buffer_pool: CpuBufferPool<DrawIndirectCommand>,
     pub(crate) quad_vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
     pub(crate) quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
     pub(crate) default_sampler: Arc<Sampler>,
@@ -173,7 +175,9 @@ impl GraphicsContext {
 
         let pipeline = Arc::new(
             GraphicsPipeline::start()
+                // Please note that `OneVertexOneInstanceDefinition` is currently unstable as of `vulkano` 0.9
                 .vertex_input_single_buffer::<Vertex>()
+                // .vertex_input(OneVertexOneInstanceDefinition::<Vertex, InstanceProperties>::new())
                 .vertex_shader(vertex_shader.main_entry_point(), ())
                 .triangle_list()
                 .viewports_dynamic_scissors_irrelevant(1)
@@ -203,7 +207,20 @@ impl GraphicsContext {
         let top = 0.0;
         let bottom = window_mode.height;
 
-        let sampler = Sampler::simple_repeat_linear(device.clone());
+        // let sampler = Sampler::simple_repeat_linear(device.clone());
+        let sampler = Sampler::new(
+            device.clone(),
+            Filter::Linear,
+            Filter::Linear,
+            MipmapMode::Nearest,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+        ).unwrap();
 
         // let white_image = Image::make_raw(
         //     queue.clone(),
@@ -214,7 +231,7 @@ impl GraphicsContext {
         //     swapchain.format(),
         // )?;
 
-        // TODO: Workaround this. Use the above instead. 
+        // TODO: Workaround this. Use the above instead.
         // I really can't figure it out.
         let white_image = {
             use image;
@@ -251,7 +268,7 @@ impl GraphicsContext {
             queue,
             swapchain,
             swapchain_images,
-            previous_frame_end: Box::new(sync::now(device.clone())),
+            previous_frame_end: None,
             quad_vertex_buffer,
             quad_index_buffer,
             multisample_samples,
@@ -383,6 +400,32 @@ impl GraphicsContext {
         Ok(())
     }
 
+    pub(crate) fn next_descriptor(
+        &mut self,
+        param: DrawTransform,
+        texture: Option<Arc<dyn ImageViewAccess + Send + Sync>>,
+    ) -> Arc<dyn DescriptorSet + Send + Sync> {
+        let uniform_buffer = self.uniform_buffer_pool
+            .next(vs::ty::Globals {
+                mvp: (self.projection * param.matrix).into(),
+            })
+            .unwrap();
+
+        Arc::new(
+            self.descriptor_pool
+                .next()
+                .add_buffer(uniform_buffer)
+                .unwrap()
+                .add_sampled_image(
+                    texture.unwrap_or(self.white_image.texture.clone()),
+                    self.default_sampler.clone(),
+                )
+                .unwrap()
+                .build()
+                .unwrap(),
+        )
+    }
+
     pub(crate) fn dynamic_state(&self) -> DynamicState {
         DynamicState {
             line_width: None,
@@ -400,7 +443,7 @@ impl GraphicsContext {
     }
 
     pub(crate) fn flush(&mut self) {
-        self.previous_frame_end.cleanup_finished();
+        // self.previous_frame_end.cleanup_finished();
 
         if self.recreate_swapchain {
             let physical_device = self.device.physical_device();
@@ -503,8 +546,9 @@ impl GraphicsContext {
 
         let command_buffer = command_buffer.end_render_pass().unwrap().build().unwrap();
 
-        let mut previous = Box::new(sync::now(self.device.clone())) as _;
-        mem::swap(&mut self.previous_frame_end, &mut previous);
+        let previous = self.previous_frame_end
+            .take()
+            .unwrap_or(Box::new(sync::now(self.device.clone())));
 
         let future = previous
             .join(acquire_future)
@@ -514,9 +558,9 @@ impl GraphicsContext {
             .then_signal_fence_and_flush();
 
         match future {
-            Ok(future) => {
-                let mut future = Box::new(future) as Box<_>;
-                mem::replace(&mut self.previous_frame_end, future);
+            Ok(mut future) => {
+                future.cleanup_finished();
+                self.previous_frame_end = Some(Box::new(future));
             }
             Err(sync::FlushError::OutOfDate) => {
                 self.recreate_swapchain = true;
