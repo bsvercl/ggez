@@ -186,16 +186,22 @@ impl GraphicsContext {
                 .unwrap(),
         );
 
-        let (quad_vertex_buffer, _) = ImmutableBuffer::from_iter(
+        let (quad_vertex_buffer, quad_vertex_future) = ImmutableBuffer::from_iter(
             QUAD_VERTICES.iter().cloned(),
             BufferUsage::vertex_buffer(),
             queue.clone(),
         ).unwrap();
-        let (quad_index_buffer, _) = ImmutableBuffer::from_iter(
+        let (quad_index_buffer, quad_index_future) = ImmutableBuffer::from_iter(
             QUAD_INDICES.iter().cloned(),
             BufferUsage::index_buffer(),
             queue.clone(),
         ).unwrap();
+        quad_vertex_future
+            .join(quad_index_future)
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
 
         let initial_projection = Matrix4::identity();
         let initial_transform = Matrix4::identity();
