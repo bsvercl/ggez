@@ -65,6 +65,9 @@ fn build_mesh(ctx: &mut Context) -> GameResult<graphics::Mesh> {
 
 impl event::EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
+        if timer::get_ticks(ctx) % 100 == 0 {
+            println!("fps: {}", timer::get_fps(ctx));
+        }
         const DESIRED_FPS: u32 = 60;
 
         while timer::check_update_time(ctx, DESIRED_FPS) {
@@ -79,6 +82,14 @@ impl event::EventHandler for MainState {
         // let src = graphics::Rect::one();
         let dst = cgmath::Point2::new(20.0, 20.0);
         graphics::draw(ctx, &self.image1, (dst,))?;
+
+        graphics::rectangle(
+            ctx,
+            graphics::Color::new(0.0, 1.0, 1.0, 1.0),
+            graphics::DrawMode::Fill,
+            graphics::Rect::new(50.0, 50.0, 100.0, 100.0),
+        )?;
+
         /*
         let dst = cgmath::Point2::new(200.0, 100.0);
         let dst2 = cgmath::Point2::new(400.0, 400.0);
