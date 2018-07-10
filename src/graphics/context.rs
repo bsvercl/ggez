@@ -491,6 +491,10 @@ impl GraphicsContext {
     }
 
     pub(crate) fn flush(&mut self) {
+        if let Some(ref mut previous_frame_end) = self.previous_frame_end {
+            previous_frame_end.cleanup_finished();
+        }
+
         if self.recreate_swapchain {
             let physical_device = self.device.physical_device();
 
@@ -579,8 +583,7 @@ impl GraphicsContext {
             .then_signal_fence_and_flush();
 
         match future {
-            Ok(mut future) => {
-                future.cleanup_finished();
+            Ok(future) => {
                 self.previous_frame_end = Some(Box::new(future));
             }
             Err(sync::FlushError::OutOfDate) => {
