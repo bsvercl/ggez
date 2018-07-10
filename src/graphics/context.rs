@@ -50,7 +50,7 @@ pub(crate) struct GraphicsContext {
     framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
     recreate_swapchain: bool,
-    clear_color: [f32; 4],
+    pub(crate) clear_color: [f32; 4],
     dimensions: [u32; 2],
     pub(crate) multisample_samples: u32,
 

@@ -103,6 +103,7 @@ const QUAD_INDICES: [u16; 6] = [0, 1, 2, 0, 2, 3];
 /// TODO: Into<Color> ?
 pub fn clear(ctx: &mut Context, color: Color) {
     let gfx = &mut ctx.gfx_context;
+    gfx.clear_color = color.into();
 }
 
 /// Draws the given `Drawable` object to the screen by calling its
