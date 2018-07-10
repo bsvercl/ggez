@@ -496,9 +496,6 @@ impl Drawable for Mesh {
         // self.debug_id.assert(ctx);
         let gfx = &mut ctx.gfx_context;
 
-        // TODO: This is ugly, but you get the idea.
-        // There is very similar code in `image.rs`.
-
         gfx.draw(
             &[param],
             Some(self.vertex_buffer.clone()),
