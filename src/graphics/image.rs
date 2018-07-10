@@ -3,7 +3,8 @@ use std::path;
 use std::sync::Arc;
 
 use image;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::buffer::BufferAccess;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, DrawIndirectCommand};
 use vulkano::device::Queue;
 use vulkano::format::{AcceptsPixels, Format, FormatDesc};
 use vulkano::image::{Dimensions, ImageAccess, ImageViewAccess, ImmutableImage};
@@ -119,17 +120,12 @@ impl Image {
             return Err(GameError::ResourceLoadError(msg));
         }
 
-        let (texture, future) = ImmutableImage::from_iter(
+        let (texture, _future) = ImmutableImage::from_iter(
             rgba,
             Dimensions::Dim2d { width, height },
             format,
             queue.clone(),
         ).unwrap();
-        future
-            .then_signal_fence_and_flush()
-            .unwrap()
-            .wait(None)
-            .unwrap();
 
         Ok(Self {
             texture,
@@ -234,26 +230,7 @@ impl Drawable for Image {
         );
         let new_param = param.mul(Matrix4::new_nonuniform_scaling(&real_scale));
 
-        let descriptor = gfx.next_descriptor(new_param, Some(self.texture.clone()));
-        let secondary_command_buffer = Arc::new(
-            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
-                gfx.device.clone(),
-                gfx.queue.family(),
-                gfx.pipeline.clone().subpass(),
-            ).unwrap()
-                .draw_indexed(
-                    gfx.pipeline.clone(),
-                    gfx.dynamic_state(),
-                    vec![gfx.quad_vertex_buffer.clone()],
-                    gfx.quad_index_buffer.clone(),
-                    descriptor,
-                    (),
-                )
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
-        gfx.add_secondary_command_buffer(secondary_command_buffer.clone());
+        gfx.draw(&[new_param], None, None, Some(self.texture.clone()));
 
         Ok(())
     }

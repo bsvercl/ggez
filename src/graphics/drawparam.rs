@@ -215,6 +215,7 @@ impl Default for DrawTransform {
 }
 
 impl From<DrawParam> for DrawTransform {
+    // TODO: I think this is in OpenGL device coordinates. We need coordinates for Vulkan.
     fn from(param: DrawParam) -> Self {
         let translate = Matrix4::new_translation(&Vec3::new(param.dest.x, param.dest.y, 0.0));
         let offset = Matrix4::new_translation(&Vec3::new(param.offset.x, param.offset.y, 0.0));
@@ -262,21 +263,21 @@ impl DrawTransform {
         }
     }
 
-    // pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
-    //     let mat: [[f32; 4]; 4] = self.matrix.into();
-    //     let color: [f32; 4] = if srgb {
-    //         let linear_color: types::LinearColor = self.color.into();
-    //         linear_color.into()
-    //     } else {
-    //         self.color.into()
-    //     };
-    //     InstanceProperties {
-    //         src: self.src.into(),
-    //         col1: mat[0],
-    //         col2: mat[1],
-    //         col3: mat[2],
-    //         col4: mat[3],
-    //         color: color,
-    //     }
-    // }
+    pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
+        let mat: [[f32; 4]; 4] = self.matrix.into();
+        // let color: [f32; 4] = if srgb {
+        //     let linear_color: types::LinearColor = self.color.into();
+        //     linear_color.into()
+        // } else {
+        //     self.color.into()
+        // };
+        InstanceProperties {
+            src: self.src.into(),
+            col1: mat[0],
+            col2: mat[1],
+            col3: mat[2],
+            col4: mat[3],
+            color: self.color.into(),
+        }
+    }
 }

@@ -49,6 +49,17 @@ pub(crate) struct Vertex {
 }
 impl_vertex!(Vertex, position, texcoord);
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct InstanceProperties {
+    src: [f32; 4],
+    col1: [f32; 4],
+    col2: [f32; 4],
+    col3: [f32; 4],
+    col4: [f32; 4],
+    color: [f32; 4],
+}
+impl_vertex!(InstanceProperties, src, col1, col2, col3, col4, color);
+
 pub(crate) mod vs {
     #[derive(VulkanoShader)]
     #[ty = "vertex"]

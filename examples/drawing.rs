@@ -29,7 +29,7 @@ impl MainState {
         let mut image2_nearest = graphics::Image::new(ctx, "/shot.png")?;
         // image2_nearest.set_filter(graphics::FilterMode::Nearest);
         let circle = graphics::MeshBuilder::new()
-            .circle(graphics::DrawMode::Fill, [0.0, 00.0], 50.0, 0.01)
+            .circle(graphics::DrawMode::Fill, [0.0, 0.0], 100.0, 0.01)
             .build(ctx)?;
         let s = MainState {
             image1,

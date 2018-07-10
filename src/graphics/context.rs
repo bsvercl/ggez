@@ -1,6 +1,9 @@
+use std::iter;
 use std::mem;
 use std::sync::Arc;
-use vulkano::buffer::{BufferAccess, BufferUsage, CpuBufferPool, ImmutableBuffer};
+use vulkano::buffer::{
+    BufferAccess, BufferUsage, CpuBufferPool, ImmutableBuffer, TypedBufferAccess,
+};
 use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
 use vulkano::command_buffer::pool::{CommandPoolAlloc, StandardCommandPool};
 use vulkano::command_buffer::{
@@ -60,7 +63,6 @@ pub(crate) struct GraphicsContext {
     pub(crate) descriptor_pool:
         FixedSizeDescriptorSetsPool<Arc<dyn GraphicsPipelineAbstract + Send + Sync>>,
     pub(crate) uniform_buffer_pool: CpuBufferPool<vs::ty::Globals>,
-    // pub(crate) index_buffer_pool: CpuBufferPool<DrawIndirectCommand>,
     pub(crate) quad_vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
     pub(crate) quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
     pub(crate) default_sampler: Arc<Sampler>,
@@ -175,7 +177,7 @@ impl GraphicsContext {
 
         let pipeline = Arc::new(
             GraphicsPipeline::start()
-                .vertex_input_single_buffer::<Vertex>()
+                .vertex_input(OneVertexOneInstanceDefinition::<Vertex, InstanceProperties>::new())
                 .vertex_shader(vertex_shader.main_entry_point(), ())
                 .triangle_list()
                 .viewports_dynamic_scissors_irrelevant(1)
@@ -186,30 +188,16 @@ impl GraphicsContext {
                 .unwrap(),
         );
 
-        let (quad_vertex_buffer, quad_vertex_future) = ImmutableBuffer::from_iter(
+        let (quad_vertex_buffer, _) = ImmutableBuffer::from_iter(
             QUAD_VERTICES.iter().cloned(),
             BufferUsage::vertex_buffer(),
             queue.clone(),
         ).unwrap();
-        let (quad_index_buffer, quad_index_future) = ImmutableBuffer::from_iter(
+        let (quad_index_buffer, _) = ImmutableBuffer::from_iter(
             QUAD_INDICES.iter().cloned(),
             BufferUsage::index_buffer(),
             queue.clone(),
         ).unwrap();
-        quad_vertex_future
-            .join(quad_index_future)
-            .then_signal_fence_and_flush()
-            .unwrap()
-            .wait(None)
-            .unwrap();
-
-        let initial_projection = Matrix4::identity();
-        let initial_transform = Matrix4::identity();
-
-        let left = 0.0;
-        let right = window_mode.width;
-        let top = 0.0;
-        let bottom = window_mode.height;
 
         // let sampler = Sampler::simple_repeat_linear(device.clone());
         let sampler = Sampler::new(
@@ -226,45 +214,52 @@ impl GraphicsContext {
             0.0,
         ).unwrap();
 
-        let white_image = Image::make_raw(
-            queue.clone(),
-            sampler.clone(),
-            1,
-            1,
-            [255, 255, 255, 255].iter().cloned(),
-            swapchain.format(),
-        )?;
+        // let white_image = Image::make_raw(
+        //     queue.clone(),
+        //     sampler.clone(),
+        //     1,
+        //     1,
+        //     [255, 255, 255, 255].iter().cloned(),
+        //     swapchain.format(),
+        // )?;
 
         // TODO: Workaround this. Use the above instead.
         // I really can't figure it out.
-        // let white_image = {
-        //     use image;
-        //     use vulkano::image::ImmutableImage;
+        let white_image = {
+            use image;
+            use vulkano::image::ImmutableImage;
 
-        //     let image = image::load_from_memory_with_format(
-        //         include_bytes!("../../resources/white.png"),
-        //         image::ImageFormat::PNG,
-        //     ).unwrap()
-        //         .to_rgba();
-        //     let (width, height) = image.dimensions();
-        //     let image_data = image.into_raw().clone();
+            let image = image::load_from_memory_with_format(
+                include_bytes!("../../resources/white.png"),
+                image::ImageFormat::PNG,
+            ).unwrap()
+                .to_rgba();
+            let (width, height) = image.dimensions();
+            let image_data = image.into_raw().clone();
 
-        //     let (texture, future) = ImmutableImage::from_iter(
-        //         image_data.iter().cloned(),
-        //         Dimensions::Dim2d { width, height },
-        //         swapchain.format(),
-        //         queue.clone(),
-        //     ).unwrap();
+            let (texture, _) = ImmutableImage::from_iter(
+                image_data.iter().cloned(),
+                Dimensions::Dim2d { width, height },
+                swapchain.format(),
+                queue.clone(),
+            ).unwrap();
 
-        //     Image {
-        //         texture,
-        //         sampler: sampler.clone(),
-        //         width,
-        //         height,
-        //     }
-        // };
+            Image {
+                texture,
+                sampler: sampler.clone(),
+                width,
+                height,
+            }
+        };
 
-        Ok(GraphicsContext {
+        let initial_projection = Matrix4::identity();
+        let initial_transform = Matrix4::identity();
+        let left = 0.0;
+        let right = window_mode.width;
+        let top = 0.0;
+        let bottom = window_mode.height;
+
+        let mut graphics_context = GraphicsContext {
             secondary_command_buffers: vec![],
             projection: initial_projection,
             modelview_stack: vec![initial_transform],
@@ -289,7 +284,20 @@ impl GraphicsContext {
             device,
             pipeline,
             white_image,
-        })
+        };
+
+        let w = window_mode.width;
+        let h = window_mode.height;
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            w,
+            h,
+        };
+        graphics_context.set_projection_rect(rect);
+        graphics_context.calculate_transform_matrix();
+
+        Ok(graphics_context)
     }
 
     pub(crate) fn update_globals(&mut self) -> GameResult {
@@ -333,10 +341,6 @@ impl GraphicsContext {
             .last()
             .expect("Transform stack empty; should never happen!");
         *last
-    }
-
-    pub(crate) fn update_instance_properties(&mut self, param: DrawTransform) -> GameResult {
-        Ok(())
     }
 
     pub(crate) fn get_format(&self) -> Format {
@@ -404,18 +408,20 @@ impl GraphicsContext {
         Ok(())
     }
 
-    pub(crate) fn next_descriptor(
+    pub(crate) fn draw(
         &mut self,
-        param: DrawTransform,
+        params: &[DrawTransform],
+        vertex_buffer: Option<Arc<ImmutableBuffer<[Vertex]>>>,
+        index_buffer: Option<Arc<ImmutableBuffer<[u16]>>>,
         texture: Option<Arc<dyn ImageViewAccess + Send + Sync>>,
-    ) -> Arc<dyn DescriptorSet + Send + Sync> {
-        let uniform_buffer = self.uniform_buffer_pool
-            .next(vs::ty::Globals {
-                mvp: (self.projection * param.matrix).into(),
-            })
-            .unwrap();
+    ) {
+        let descriptor = {
+            let uniform_buffer = self.uniform_buffer_pool
+                .next(vs::ty::Globals {
+                    mvp: self.mvp.into(),
+                })
+                .unwrap();
 
-        Arc::new(
             self.descriptor_pool
                 .next()
                 .add_buffer(uniform_buffer)
@@ -426,8 +432,46 @@ impl GraphicsContext {
                 )
                 .unwrap()
                 .build()
+                .unwrap()
+        };
+
+        // TODO: Don't wait on this future
+        let instance_buffer = {
+            let instance_properties = params
+                .iter()
+                .map(|param| param.to_instance_properties(false))
+                .collect::<Vec<_>>();
+            let (instance_buffer, _) = ImmutableBuffer::from_iter(
+                instance_properties.iter().cloned(),
+                BufferUsage::vertex_buffer(),
+                self.queue.clone(),
+            ).unwrap();
+            instance_buffer
+        };
+
+        let vertex_buffer = vertex_buffer.unwrap_or(self.quad_vertex_buffer.clone());
+        let index_buffer = index_buffer.unwrap_or(self.quad_index_buffer.clone());
+
+        let secondary_command_buffer = Arc::new(
+            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+                self.device.clone(),
+                self.queue.family(),
+                self.pipeline.clone().subpass(),
+            ).unwrap()
+                .draw_indexed(
+                    self.pipeline.clone(),
+                    self.dynamic_state(),
+                    vec![vertex_buffer, instance_buffer],
+                    index_buffer,
+                    descriptor,
+                    (),
+                )
+                .unwrap()
+                .build()
                 .unwrap(),
-        )
+        );
+        self.secondary_command_buffers
+            .push(secondary_command_buffer);
     }
 
     pub(crate) fn dynamic_state(&self) -> DynamicState {
@@ -447,8 +491,6 @@ impl GraphicsContext {
     }
 
     pub(crate) fn flush(&mut self) {
-        // self.previous_frame_end.cleanup_finished();
-
         if self.recreate_swapchain {
             let physical_device = self.device.physical_device();
 
@@ -471,30 +513,6 @@ impl GraphicsContext {
                 };
             mem::replace(&mut self.swapchain, new_swapchain);
             mem::replace(&mut self.swapchain_images, new_swapchain_images);
-
-            // self.set_projection_rect(Rect::new(
-            //     0.0,
-            //     0.0,
-            //     self.dimensions[0] as f32,
-            //     self.dimensions[1] as f32,
-            // ));
-
-            type Vec3 = na::Vector3<f32>;
-            let rect = Rect::new(
-                0.0,
-                0.0,
-                self.dimensions[0] as f32,
-                self.dimensions[1] as f32,
-            );
-            self.screen_rect = rect;
-            self.projection = Matrix4::new_orthographic(
-                rect.x,
-                rect.x + rect.w,
-                rect.y,
-                rect.y + rect.h,
-                -1.0,
-                1.0,
-            ).append_nonuniform_scaling(&Vec3::new(1.0, -1.0, 1.0));
 
             self.framebuffers = None;
             self.recreate_swapchain = false;
@@ -539,14 +557,13 @@ impl GraphicsContext {
             )
             .unwrap();
 
-        for secondary_command_buffer in self.secondary_command_buffers.iter().cloned() {
+        for secondary_command_buffer in self.secondary_command_buffers.drain(..) {
             unsafe {
                 command_buffer = command_buffer
                     .execute_commands(secondary_command_buffer)
                     .unwrap();
             }
         }
-        self.secondary_command_buffers.clear();
 
         let command_buffer = command_buffer.end_render_pass().unwrap().build().unwrap();
 

@@ -3,8 +3,8 @@ use graphics::*;
 use lyon;
 use lyon::tessellation as t;
 use std::sync::Arc;
-use vulkano::buffer::{BufferUsage, ImmutableBuffer};
-use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::buffer::{BufferAccess, BufferUsage, ImmutableBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, DrawIndirectCommand};
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::sync::GpuFuture;
 
@@ -353,22 +353,16 @@ impl MeshBuilder {
     pub fn build(&self, ctx: &mut Context) -> GameResult<Mesh> {
         let gfx = &mut ctx.gfx_context;
 
-        let (vertex_buffer, vertex_future) = ImmutableBuffer::from_iter(
+        let (vertex_buffer, _) = ImmutableBuffer::from_iter(
             self.buffer.vertices.iter().cloned(),
             BufferUsage::vertex_buffer(),
             gfx.queue.clone(),
         ).unwrap();
-        let (index_buffer, index_future) = ImmutableBuffer::from_iter(
+        let (index_buffer, _) = ImmutableBuffer::from_iter(
             self.buffer.indices.iter().cloned(),
             BufferUsage::index_buffer(),
             gfx.queue.clone(),
         ).unwrap();
-        vertex_future
-            .join(index_future)
-            .then_signal_fence_and_flush()
-            .unwrap()
-            .wait(None)
-            .unwrap();
 
         Ok(Mesh {
             vertex_buffer,
@@ -505,26 +499,12 @@ impl Drawable for Mesh {
         // TODO: This is ugly, but you get the idea.
         // There is very similar code in `image.rs`.
 
-        let descriptor = gfx.next_descriptor(param, None);
-        let secondary_command_buffer = Arc::new(
-            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
-                gfx.device.clone(),
-                gfx.queue.family(),
-                gfx.pipeline.clone().subpass(),
-            ).unwrap()
-                .draw_indexed(
-                    gfx.pipeline.clone(),
-                    gfx.dynamic_state(),
-                    vec![self.vertex_buffer.clone()],
-                    self.index_buffer.clone(),
-                    descriptor,
-                    (),
-                )
-                .unwrap()
-                .build()
-                .unwrap(),
+        gfx.draw(
+            &[param],
+            Some(self.vertex_buffer.clone()),
+            Some(self.index_buffer.clone()),
+            None,
         );
-        gfx.add_secondary_command_buffer(secondary_command_buffer.clone());
 
         Ok(())
     }
