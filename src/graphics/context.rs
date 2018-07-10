@@ -73,13 +73,6 @@ pub(crate) struct GraphicsContext {
 }
 
 impl GraphicsContext {
-    pub(crate) fn add_secondary_command_buffer(
-        &mut self,
-        command_buffer: Arc<dyn CommandBuffer<PoolAlloc = StandardCommandPoolAlloc> + Send + Sync>,
-    ) {
-        self.secondary_command_buffers.push(command_buffer);
-    }
-
     pub(crate) fn new(
         events_loop: &winit::EventsLoop,
         window_setup: &WindowSetup,
@@ -300,10 +293,6 @@ impl GraphicsContext {
         graphics_context.calculate_transform_matrix();
 
         Ok(graphics_context)
-    }
-
-    pub(crate) fn update_globals(&mut self) -> GameResult {
-        Ok(())
     }
 
     pub(crate) fn calculate_transform_matrix(&mut self) {
