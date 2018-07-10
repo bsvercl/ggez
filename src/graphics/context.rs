@@ -348,11 +348,9 @@ impl GraphicsContext {
     }
 
     pub(crate) fn set_projection_rect(&mut self, rect: Rect) {
-        type Vec3 = na::Vector3<f32>;
         self.screen_rect = rect;
         self.projection =
-            Matrix4::new_orthographic(rect.x, rect.x + rect.w, rect.y, rect.y + rect.h, -1.0, 1.0)
-                .append_nonuniform_scaling(&Vec3::new(1.0, 1.0, 1.0));
+            Matrix4::new_orthographic(rect.x, rect.x + rect.w, rect.y, rect.y + rect.h, -1.0, 1.0);
     }
 
     pub(crate) fn set_projection(&mut self, t: Matrix4) {
