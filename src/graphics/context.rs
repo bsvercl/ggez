@@ -35,7 +35,6 @@ use winit::dpi;
 
 use conf::{FullscreenType, WindowMode, WindowSetup};
 use context::DebugId;
-use graphics::win::{self, VkSurfaceBuild};
 use graphics::*;
 
 use GameResult;
@@ -83,7 +82,7 @@ impl GraphicsContext {
         debug_id: DebugId,
     ) -> GameResult<Self> {
         let instance = {
-            let extensions = win::required_extensions();
+            let extensions = vulkano_win::required_extensions();
             Instance::new(None, &extensions, None).unwrap()
         };
 

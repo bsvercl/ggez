@@ -120,12 +120,7 @@ extern crate winit;
 extern crate vulkano;
 #[macro_use]
 extern crate vulkano_shader_derive;
-#[cfg(target_os = "macos")]
-extern crate cocoa;
-#[cfg(target_os = "macos")]
-extern crate metal_rs as metal;
-#[cfg(target_os = "macos")]
-extern crate objc;
+extern crate vulkano_win;
 extern crate zip;
 
 pub mod audio;

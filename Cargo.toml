@@ -31,8 +31,9 @@ multithread-image-decoding = ["image/hdr", "image/jpeg_rayon"]
 bitflags = "1.0"
 zip = { version = "0.4", default-features = false }
 app_dirs2 = "2"
-vulkano = "0.9"
-vulkano-shader-derive = "0.9"
+vulkano =  { git = "https://github.com/vulkano-rs/vulkano" }
+vulkano-shader-derive =  { git = "https://github.com/vulkano-rs/vulkano" }
+vulkano-win = { git = "https://github.com/vulkano-rs/vulkano" }
 image = {version = "0.19", default-features = false, features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm",
 "tga", "tiff", "webp", "bmp", "dxt", ] }
 rodio = "0.8"
@@ -54,8 +55,3 @@ fern = "0.5"
 rand = "0.5"
 clap = "2"
 cgmath = { version = "0.16", features = ["mint"]}
-
-[target.'cfg(target_os = "macos")'.dependencies]
-metal-rs = "0.6"
-cocoa = "0.13"
-objc = "0.2.2"

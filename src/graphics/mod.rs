@@ -30,7 +30,6 @@ mod mesh;
 mod types;
 use mint;
 use nalgebra as na;
-pub(crate) mod win;
 
 // pub mod spritebatch;
 
@@ -42,7 +41,6 @@ pub use self::mesh::*;
 // pub use self::shader::*;
 // pub use self::text::*;
 pub use self::types::*;
-pub(crate) use self::win::*;
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct Vertex {
