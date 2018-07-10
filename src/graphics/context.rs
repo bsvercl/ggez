@@ -63,6 +63,7 @@ pub(crate) struct GraphicsContext {
     pub(crate) descriptor_pool:
         FixedSizeDescriptorSetsPool<Arc<dyn GraphicsPipelineAbstract + Send + Sync>>,
     pub(crate) uniform_buffer_pool: CpuBufferPool<vs::ty::Globals>,
+    instance_buffer_pool: CpuBufferPool<InstanceProperties>,
     pub(crate) quad_vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
     pub(crate) quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
     pub(crate) default_sampler: Arc<Sampler>,
@@ -281,6 +282,7 @@ impl GraphicsContext {
             screen_rect: Rect::new(left, top, right - left, bottom - top),
             descriptor_pool: FixedSizeDescriptorSetsPool::new(pipeline.clone(), 0),
             uniform_buffer_pool: CpuBufferPool::uniform_buffer(device.clone()),
+            instance_buffer_pool: CpuBufferPool::vertex_buffer(device.clone()),
             device,
             pipeline,
             white_image,
@@ -420,33 +422,24 @@ impl GraphicsContext {
                 })
                 .unwrap();
 
+            let current_texture = texture.unwrap_or(self.white_image.texture.clone());
             self.descriptor_pool
                 .next()
                 .add_buffer(uniform_buffer)
                 .unwrap()
-                .add_sampled_image(
-                    texture.unwrap_or(self.white_image.texture.clone()),
-                    self.default_sampler.clone(),
-                )
+                .add_sampled_image(current_texture, self.default_sampler.clone())
                 .unwrap()
                 .build()
                 .unwrap()
         };
 
-        // TODO: Don't wait on this future.
-        // TODO: Maybe use `DeviceLocalMemory` because it doesn't change ever.
         let instance_buffer = {
-            let instance_properties = params
+            let instances = params
                 .iter()
                 // TODO: Use srgb?
                 .map(|param| param.to_instance_properties(false))
                 .collect::<Vec<_>>();
-            let (instance_buffer, _) = ImmutableBuffer::from_iter(
-                instance_properties.iter().cloned(),
-                BufferUsage::vertex_buffer(),
-                self.queue.clone(),
-            ).unwrap();
-            instance_buffer
+            Arc::new(self.instance_buffer_pool.chunk(instances).unwrap())
         };
 
         let vertex_buffer = vertex_buffer.unwrap_or(self.quad_vertex_buffer.clone());
