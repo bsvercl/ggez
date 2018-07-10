@@ -18,7 +18,6 @@ struct MainState {
     image1: graphics::Image,
     image2_linear: graphics::Image,
     image2_nearest: graphics::Image,
-    circle: graphics::Mesh,
     zoomlevel: f32,
 }
 
@@ -28,15 +27,11 @@ impl MainState {
         let image2_linear = graphics::Image::new(ctx, "/shot.png")?;
         let mut image2_nearest = graphics::Image::new(ctx, "/shot.png")?;
         // image2_nearest.set_filter(graphics::FilterMode::Nearest);
-        let circle = graphics::MeshBuilder::new()
-            .circle(graphics::DrawMode::Fill, [0.0, 0.0], 100.0, 0.01)
-            .build(ctx)?;
         let s = MainState {
             image1,
             image2_linear,
             image2_nearest,
             zoomlevel: 1.0,
-            circle,
         };
 
         Ok(s)
@@ -65,9 +60,6 @@ fn build_mesh(ctx: &mut Context) -> GameResult<graphics::Mesh> {
 
 impl event::EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        if timer::get_ticks(ctx) % 100 == 0 {
-            println!("fps: {}", timer::get_fps(ctx));
-        }
         const DESIRED_FPS: u32 = 60;
 
         while timer::check_update_time(ctx, DESIRED_FPS) {
@@ -82,14 +74,6 @@ impl event::EventHandler for MainState {
         // let src = graphics::Rect::one();
         let dst = cgmath::Point2::new(20.0, 20.0);
         graphics::draw(ctx, &self.image1, (dst,))?;
-
-        graphics::rectangle(
-            ctx,
-            graphics::Color::new(0.0, 1.0, 1.0, 1.0),
-            graphics::DrawMode::Fill,
-            graphics::Rect::new(50.0, 50.0, 100.0, 100.0),
-        )?;
-
         /*
         let dst = cgmath::Point2::new(200.0, 100.0);
         let dst2 = cgmath::Point2::new(400.0, 400.0);
@@ -137,7 +121,6 @@ impl event::EventHandler for MainState {
             DrawParam::new().color((0, 0, 255)),
         )?;
         */
-        graphics::draw(ctx, &self.circle, graphics::DrawParam::default())?;
 
         graphics::present(ctx)?;
         Ok(())
