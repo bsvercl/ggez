@@ -297,12 +297,10 @@ pub fn set_default_filter(ctx: &mut Context, mode: FilterMode) {
 ///
 /// The `Rect`'s x and y will define the top-left corner of the screen,
 /// and that plus its w and h will define the bottom-right corner.
-pub fn set_screen_coordinates(context: &mut Context, rect: Rect) -> GameResult {
-    // let gfx = &mut context.gfx_context;
-    // gfx.set_projection_rect(rect);
-    // gfx.calculate_transform_matrix();
-    // gfx.update_globals()
-    unimplemented!()
+pub fn set_screen_coordinates(ctx: &mut Context, rect: Rect) {
+    let gfx = &mut ctx.gfx_context;
+    gfx.set_projection_rect(rect);
+    gfx.calculate_transform_matrix();
 }
 
 /// Sets the raw projection matrix to the given homogeneous
@@ -463,7 +461,7 @@ pub fn set_window_title(context: &Context, title: &str) {
 /// Returns a reference to the SDL window.
 /// Ideally you should not need to use this because ggez
 /// would provide all the functions you need without having
-/// to dip into SDL itself.  But life isn't always ideal.
+/// to dip into winit itself.  But life isn't always ideal.
 pub fn get_window(context: &Context) -> &winit::Window {
     let gfx = &context.gfx_context;
     &gfx.window()
