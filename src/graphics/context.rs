@@ -352,7 +352,7 @@ impl GraphicsContext {
         self.screen_rect = rect;
         self.projection =
             Matrix4::new_orthographic(rect.x, rect.x + rect.w, rect.y, rect.y + rect.h, -1.0, 1.0)
-                .append_nonuniform_scaling(&Vec3::new(1.0, -1.0, 1.0));
+                .append_nonuniform_scaling(&Vec3::new(1.0, 1.0, 1.0));
     }
 
     pub(crate) fn set_projection(&mut self, t: Matrix4) {
@@ -435,10 +435,12 @@ impl GraphicsContext {
                 .unwrap()
         };
 
-        // TODO: Don't wait on this future
+        // TODO: Don't wait on this future.
+        // TODO: Maybe use `DeviceLocalMemory` because it doesn't change ever.
         let instance_buffer = {
             let instance_properties = params
                 .iter()
+                // TODO: Use srgb?
                 .map(|param| param.to_instance_properties(false))
                 .collect::<Vec<_>>();
             let (instance_buffer, _) = ImmutableBuffer::from_iter(

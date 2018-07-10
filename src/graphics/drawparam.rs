@@ -215,7 +215,6 @@ impl Default for DrawTransform {
 }
 
 impl From<DrawParam> for DrawTransform {
-    // TODO: I think this is in OpenGL device coordinates. We need coordinates for Vulkan.
     fn from(param: DrawParam) -> Self {
         let translate = Matrix4::new_translation(&Vec3::new(param.dest.x, param.dest.y, 0.0));
         let offset = Matrix4::new_translation(&Vec3::new(param.offset.x, param.offset.y, 0.0));
