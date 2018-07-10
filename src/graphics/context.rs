@@ -31,9 +31,11 @@ use vulkano::swapchain::{
 use vulkano::sync::{self, GpuFuture};
 use vulkano_win::{self, VkSurfaceBuild};
 use winit;
+use winit::dpi;
 
 use conf::{FullscreenType, WindowMode, WindowSetup};
 use context::DebugId;
+use graphics::win::{self, VkSurfaceBuild};
 use graphics::*;
 
 use GameResult;
@@ -56,6 +58,7 @@ pub(crate) struct GraphicsContext {
 
     pub(crate) white_image: Image,
     pub(crate) projection: Matrix4,
+    pub(crate) hidpi_factor: f32,
     pub(crate) mvp: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     pub(crate) screen_rect: Rect,
@@ -80,7 +83,7 @@ impl GraphicsContext {
         debug_id: DebugId,
     ) -> GameResult<Self> {
         let instance = {
-            let extensions = vulkano_win::required_extensions();
+            let extensions = win::required_extensions();
             Instance::new(None, &extensions, None).unwrap()
         };
 
@@ -253,6 +256,12 @@ impl GraphicsContext {
         let top = 0.0;
         let bottom = window_mode.height;
 
+        let hidpi_factor = if window_mode.hidpi {
+            surface.window().get_hidpi_factor() as f32
+        } else {
+            1.0
+        };
+
         let mut graphics_context = GraphicsContext {
             secondary_command_buffers: vec![],
             projection: initial_projection,
@@ -279,7 +288,9 @@ impl GraphicsContext {
             device,
             pipeline,
             white_image,
+            hidpi_factor,
         };
+        graphics_context.set_window_mode(window_mode)?;
 
         let w = window_mode.width;
         let h = window_mode.height;
@@ -357,31 +368,49 @@ impl GraphicsContext {
     }
 
     pub(crate) fn set_window_mode(&mut self, mode: WindowMode) -> GameResult {
-        let window = self.window();
+        let window = self.surface.window();
         window.set_maximized(mode.maximized);
+
+        self.hidpi_factor = if mode.hidpi {
+            window.get_hidpi_factor() as f32
+        } else {
+            1.0
+        };
 
         let mut min_dimensions = None;
         if mode.min_width > 0.0 && mode.min_height > 0.0 {
-            min_dimensions = Some((mode.min_width as u32, mode.min_height as u32));
+            min_dimensions = Some(dpi::LogicalSize {
+                width: mode.min_width.into(),
+                height: mode.min_height.into(),
+            });
         }
         window.set_min_dimensions(min_dimensions);
 
         let mut max_dimensions = None;
         if mode.max_width > 0.0 && mode.max_height > 0.0 {
-            max_dimensions = Some((mode.max_width as u32, mode.max_height as u32));
+            max_dimensions = Some(dpi::LogicalSize {
+                width: mode.max_width.into(),
+                height: mode.max_height.into(),
+            });
         }
         window.set_max_dimensions(max_dimensions);
 
         let monitor = window.get_current_monitor();
         match mode.fullscreen_type {
-            FullscreenType::Off => {
+            FullscreenType::Windowed => {
                 window.set_fullscreen(None);
                 window.set_decorations(!mode.borderless);
-                window.set_inner_size(mode.width as u32, mode.height as u32);
+                window.set_inner_size(dpi::LogicalSize {
+                    width: mode.width.into(),
+                    height: mode.height.into(),
+                });
             }
             FullscreenType::True => {
                 window.set_fullscreen(Some(monitor));
-                window.set_inner_size(mode.width as u32, mode.height as u32);
+                window.set_inner_size(dpi::LogicalSize {
+                    width: mode.width.into(),
+                    height: mode.height.into(),
+                });
             }
             FullscreenType::Desktop => {
                 let position = monitor.get_position();
@@ -389,12 +418,16 @@ impl GraphicsContext {
                 window.set_fullscreen(None);
                 window.set_decorations(false);
                 // BUGGO: Need to find and store dpi_size
-                window.set_inner_size(dimensions.0, dimensions.1);
-                window.set_position(position.0, position.1);
+                window.set_inner_size(dimensions.to_logical(1.0));
+                window.set_position(position.to_logical(1.0));
             }
         }
 
         Ok(())
+    }
+
+    pub(crate) fn hack_event_hidpi(&self, event: &winit::Event) -> winit::Event {
+        event.clone()
     }
 
     pub(crate) fn draw(

@@ -4,6 +4,7 @@ use context::Context;
 use graphics;
 use graphics::Point2;
 use std::collections::HashMap;
+use winit::dpi;
 pub use winit::{MouseButton, MouseCursor};
 use GameError;
 use GameResult;
@@ -74,10 +75,9 @@ pub fn get_cursor_grabbed(ctx: &Context) -> bool {
 /// Set whether or not the mouse is grabbed (confined to the window)
 pub fn set_cursor_grabbed(ctx: &mut Context, grabbed: bool) -> GameResult<()> {
     ctx.mouse_context.cursor_grabbed = grabbed;
-    // graphics::get_window(ctx)
-    //     .grab_cursor(grabbed)
-    //     .map_err(|e| GameError::WindowError(e.to_string()))
-    unimplemented!()
+    graphics::get_window(ctx)
+        .grab_cursor(grabbed)
+        .map_err(|e| GameError::WindowError(e.to_string()))
 }
 
 /// Set whether or not the mouse is hidden (invisible)
@@ -88,8 +88,7 @@ pub fn get_cursor_hidden(ctx: &Context) -> bool {
 /// Set whether or not the mouse is hidden (invisible).
 pub fn set_cursor_hidden(ctx: &mut Context, hidden: bool) {
     ctx.mouse_context.cursor_hidden = hidden;
-    // graphics::get_window(ctx).hide_cursor(hidden)
-    unimplemented!()
+    graphics::get_window(ctx).hide_cursor(hidden);
 }
 
 /// Get the current position of the mouse cursor, in pixels.
@@ -104,7 +103,10 @@ pub fn get_position(ctx: &Context) -> Point2 {
 pub fn set_position(ctx: &mut Context, point: Point2) -> GameResult<()> {
     ctx.mouse_context.last_position = point;
     graphics::get_window(ctx)
-        .set_cursor_position(point.x as i32, point.y as i32)
+        .set_cursor_position(dpi::LogicalPosition {
+            x: point.x as f64,
+            y: point.y as f64,
+        })
         .map_err(|_| GameError::WindowError("Couldn't set mouse cursor position!".to_owned()))
 }
 

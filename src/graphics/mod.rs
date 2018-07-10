@@ -30,6 +30,7 @@ mod mesh;
 mod types;
 use mint;
 use nalgebra as na;
+pub(crate) mod win;
 
 // pub mod spritebatch;
 
@@ -41,6 +42,7 @@ pub use self::mesh::*;
 // pub use self::shader::*;
 // pub use self::text::*;
 pub use self::types::*;
+pub(crate) use self::win::*;
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct Vertex {
@@ -405,10 +407,9 @@ pub fn origin(context: &mut Context) {
 /// Calculates the new total transformation (Model-View-Projection) matrix
 /// based on the matrices at the top of the transform and view matrix stacks
 /// and sends it to the graphics card.
-pub fn apply_transformations(context: &mut Context) -> GameResult {
-    let gfx = &mut context.gfx_context;
+pub fn apply_transformations(ctx: &mut Context) {
+    let gfx = &mut ctx.gfx_context;
     gfx.calculate_transform_matrix();
-    gfx.update_globals()
 }
 
 /// Sets the blend mode of the currently active shader program
@@ -477,16 +478,14 @@ pub fn get_size(context: &Context) -> (f64, f64) {
     let gfx = &context.gfx_context;
     gfx.window()
         .get_outer_size()
-        // .map(|logical_size| (logical_size.width, logical_size.height))
-        .map(|(x, y)| (x as f64, y as f64))
+        .map(|logical_size| (logical_size.width, logical_size.height))
         .unwrap_or((0.0, 0.0))
 }
 
 /// TODO: Really need to figure out whether all of ggez's pixel
 /// stuff is in physical or logical pixels...
-pub fn get_hidpi_factor(context: &Context) -> f32 {
-    // context.gfx_context.hidpi_factor
-    unimplemented!()
+pub fn get_hidpi_factor(ctx: &Context) -> f32 {
+    ctx.gfx_context.hidpi_factor
 }
 
 /// Returns the size of the window's underlying drawable in pixels as (width, height).
@@ -495,8 +494,7 @@ pub fn get_drawable_size(context: &Context) -> (f64, f64) {
     let gfx = &context.gfx_context;
     gfx.window()
         .get_inner_size()
-        // .map(|logical_size| (logical_size.width, logical_size.height))
-        .map(|(x, y)| (x as f64, y as f64))
+        .map(|logical_size| (logical_size.width, logical_size.height))
         .unwrap_or((0.0, 0.0))
 }
 
