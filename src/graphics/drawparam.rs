@@ -2,6 +2,8 @@ use graphics::*;
 
 use mint;
 
+use std::ops::Mul;
+
 type Vec3 = na::Vector3<f32>;
 
 /// A struct containing all the necessary info for drawing a Drawable.
@@ -250,18 +252,17 @@ impl From<DrawParam> for DrawTransform {
     }
 }
 
-impl DrawTransform {
-    /// Returns a new `PrimitiveDrawParam` with its matrix multiplied
-    /// by the given one.
-    ///
-    /// TODO: Make some way to implement `matrix * self.matrix`, or just implement `Mul`...
-    pub fn mul(self, matrix: Matrix4) -> Self {
+impl Mul<Matrix4> for DrawTransform {
+    type Output = DrawTransform;
+    fn mul(self, matrix: Matrix4) -> DrawTransform {
         DrawTransform {
             matrix: self.matrix * matrix,
             ..self
         }
     }
+}
 
+impl DrawTransform {
     pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
         let mat: [[f32; 4]; 4] = self.matrix.into();
         // let color: [f32; 4] = if srgb {
