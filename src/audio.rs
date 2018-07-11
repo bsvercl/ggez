@@ -34,7 +34,7 @@ impl AudioContext {
                 "Could not initialize sound system (for some reason)",
             ))
         })?;
-        Ok(AudioContext { device: device })
+        Ok(AudioContext { device })
     }
 }
 

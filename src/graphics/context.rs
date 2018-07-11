@@ -345,7 +345,7 @@ impl GraphicsContext {
     }
 
     pub(crate) fn get_format(&self) -> Format {
-        self.swapchain.format().clone()
+        self.swapchain.format()
     }
 
     pub(crate) fn set_projection_rect(&mut self, rect: Rect) {
@@ -443,7 +443,7 @@ impl GraphicsContext {
                 })
                 .unwrap();
 
-            let current_texture = texture.unwrap_or(self.white_image.texture.clone());
+            let current_texture = texture.unwrap_or_else(|| self.white_image.texture.clone());
             self.descriptor_pool
                 .next()
                 .add_buffer(uniform_buffer)
@@ -463,8 +463,8 @@ impl GraphicsContext {
             Arc::new(self.instance_buffer_pool.chunk(instances).unwrap())
         };
 
-        let vertex_buffer = vertex_buffer.unwrap_or(self.quad_vertex_buffer.clone());
-        let index_buffer = index_buffer.unwrap_or(self.quad_index_buffer.clone());
+        let vertex_buffer = vertex_buffer.unwrap_or_else(|| self.quad_vertex_buffer.clone());
+        let index_buffer = index_buffer.unwrap_or_else(|| self.quad_index_buffer.clone());
 
         let secondary_command_buffer = Arc::new(
             AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
@@ -587,7 +587,7 @@ impl GraphicsContext {
 
         let previous = self.previous_frame_end
             .take()
-            .unwrap_or(Box::new(sync::now(self.device.clone())));
+            .unwrap_or_else(|| Box::new(sync::now(self.device.clone())));
 
         let future = previous
             .join(acquire_future)

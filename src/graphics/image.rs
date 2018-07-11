@@ -69,7 +69,7 @@ impl Image {
         let debug_id = DebugId::get(context);
         let gfx = &context.gfx_context;
         Self::make_raw(
-            gfx.queue.clone(),
+            &gfx.queue.clone(),
             gfx.default_sampler.clone(),
             width,
             height,
@@ -85,7 +85,7 @@ impl Image {
     }
 
     pub(crate) fn make_raw<P, F, I>(
-        queue: Arc<Queue>,
+        queue: &Arc<Queue>,
         sampler: Arc<Sampler>,
         width: u32,
         height: u32,
