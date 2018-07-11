@@ -26,7 +26,7 @@ impl MainState {
         let image1 = graphics::Image::new(ctx, "/dragon1.png")?;
         let image2_linear = graphics::Image::new(ctx, "/shot.png")?;
         let mut image2_nearest = graphics::Image::new(ctx, "/shot.png")?;
-        // image2_nearest.set_filter(graphics::FilterMode::Nearest);
+        image2_nearest.set_filter(graphics::FilterMode::Nearest);
         let s = MainState {
             image1,
             image2_linear,
@@ -102,10 +102,8 @@ impl event::EventHandler for MainState {
                 .scale(scale)
                 // shear: shear,
         )?;
-
         let rect = graphics::Rect::new(450.0, 450.0, 50.0, 50.0);
         graphics::rectangle(ctx, graphics::WHITE, graphics::DrawMode::Fill, rect)?;
-
         let rect = graphics::Rect::new(450.0, 450.0, 50.0, 50.0);
         graphics::rectangle(
             ctx,
@@ -113,7 +111,6 @@ impl event::EventHandler for MainState {
             graphics::DrawMode::Line(1.0),
             rect,
         )?;
-
         let mesh = build_mesh(ctx)?;
         graphics::draw(
             ctx,
@@ -124,20 +121,6 @@ impl event::EventHandler for MainState {
 
         graphics::present(ctx)?;
         Ok(())
-    }
-
-    fn key_down_event(
-        &mut self,
-        ctx: &mut Context,
-        keycode: event::KeyCode,
-        keymods: event::KeyMods,
-        repeat: bool,
-    ) {
-        if keycode == event::KeyCode::P {
-            let img = graphics::screenshot(ctx).unwrap();
-            img.encode(ctx, graphics::ImageFormat::Png, "/screenshot.png")
-                .expect("Could not save screenshot");
-        }
     }
 }
 
@@ -153,7 +136,7 @@ pub fn main() -> GameResult {
         filesystem::mount(ctx, &path, true);
     }
 
-    // println!("{}", graphics::get_renderer_info(ctx)?);
+    println!("{}", graphics::get_renderer_info(ctx)?);
     let state = &mut MainState::new(ctx).unwrap();
     event::run(ctx, events_loop, state)
 }
