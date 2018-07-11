@@ -65,24 +65,24 @@
 
 use context::Context;
 
+use winit::ModifiersState;
 /// A key code.
 pub use winit::VirtualKeyCode as KeyCode;
-use winit::ModifiersState;
 
 bitflags! {
     /// Bitflags describing state of keyboard modifiers, such as Control or Shift.
     #[derive(Default)]
     pub struct KeyMods: u8 {
         /// No modifiers; equivalent to `KeyMods::default()` and `KeyMods::empty()`.
-        const NONE  = 0b00000000;
+        const NONE  = 0b0000_0000;
         /// Left or right Shift key.
-        const SHIFT = 0b00000001;
+        const SHIFT = 0b0000_0001;
         /// Left or right Control key.
-        const CTRL  = 0b00000010;
+        const CTRL  = 0b0000_0010;
         /// Left or right Alt key.
-        const ALT   = 0b00000100;
+        const ALT   = 0b0000_0100;
         /// Left or right Win/Cmd/equivalent key.
-        const LOGO  = 0b00001000;
+        const LOGO  = 0b0000_1000;
     }
 }
 
@@ -105,7 +105,6 @@ impl From<ModifiersState> for KeyMods {
     }
 }
 
-
 /// Tracks held down keyboard keys, active keyboard modifiers,
 /// and figures out if the system is sending repeat keystrokes.
 #[derive(Clone, Debug)]
@@ -127,10 +126,10 @@ impl KeyboardContext {
         // Rust what an enum's max member is and a Sufficiently Big
         // fixed-size array `[bool; MAX_KEY_IDX]` doesn't implement
         // nice things like Debug.  :|
-        // We have an assert everywhere pressed_keys is accessed so 
+        // We have an assert everywhere pressed_keys is accessed so
         // we know if this assumption is broken.
         const MAX_KEY_IDX: usize = 256;
-        let mut key_vec =  Vec::with_capacity(MAX_KEY_IDX);
+        let mut key_vec = Vec::with_capacity(MAX_KEY_IDX);
         key_vec.resize(MAX_KEY_IDX, false);
         Self {
             active_modifiers: KeyMods::empty(),
@@ -139,14 +138,16 @@ impl KeyboardContext {
         }
     }
 
-
     // TODO: Set modifiers correctly
     // and in general cmake sure this is hooked up correctly
     // from Context::process_event().
     // Looks like it is, but, not 100% sure.
     pub(crate) fn set_key(&mut self, key: KeyCode, pressed: bool) {
         let key_idx = key as usize;
-        assert!(key_idx < self.pressed_keys.len(), "Impossible KeyCode detected!");
+        assert!(
+            key_idx < self.pressed_keys.len(),
+            "Impossible KeyCode detected!"
+        );
         self.pressed_keys[key_idx] = pressed;
         if pressed {
             self.last_pressed = Some(key);
@@ -171,7 +172,10 @@ impl KeyboardContext {
 
     pub(crate) fn is_key_pressed(&self, key: KeyCode) -> bool {
         let key_idx = key as usize;
-        assert!(key_idx < self.pressed_keys.len(), "Impossible KeyCode detected!");
+        assert!(
+            key_idx < self.pressed_keys.len(),
+            "Impossible KeyCode detected!"
+        );
         self.pressed_keys[key_idx]
     }
 
@@ -184,7 +188,8 @@ impl KeyboardContext {
     }
 
     pub(crate) fn get_pressed_keys(&self) -> Vec<KeyCode> {
-        self.pressed_keys.iter()
+        self.pressed_keys
+            .iter()
             .enumerate()
             .filter_map(|(key_idx, b)| {
                 if *b {
@@ -193,9 +198,8 @@ impl KeyboardContext {
                     // into the matching KeyCode, because Rust's support
                     // for C-like numeric enums is UTTER GARBAGE.
                     // TODO: Can we protect this with an assertion somehow?
-                    let keycode: &KeyCode = unsafe { 
-                        &*(&key_idx as *const usize as *const KeyCode) 
-                    };
+                    let keycode: &KeyCode =
+                        unsafe { &*(&key_idx as *const usize as *const KeyCode) };
                     Some(*keycode)
                 } else {
                     None

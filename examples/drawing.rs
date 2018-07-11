@@ -125,6 +125,20 @@ impl event::EventHandler for MainState {
         graphics::present(ctx)?;
         Ok(())
     }
+
+    fn key_down_event(
+        &mut self,
+        ctx: &mut Context,
+        keycode: event::KeyCode,
+        keymods: event::KeyMods,
+        repeat: bool,
+    ) {
+        if keycode == event::KeyCode::P {
+            let img = graphics::screenshot(ctx).unwrap();
+            img.encode(ctx, graphics::ImageFormat::Png, "/screenshot.png")
+                .expect("Could not save screenshot");
+        }
+    }
 }
 
 pub fn main() -> GameResult {
