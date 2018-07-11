@@ -60,7 +60,7 @@ pub use self::t::{FillOptions, FillRule, LineCap, LineJoin, StrokeOptions};
 /// ```
 #[derive(Debug, Clone)]
 pub struct MeshBuilder {
-    buffer: t::geometry_builder::VertexBuffers<Vertex>,
+    buffer: t::geometry_builder::VertexBuffers<Vertex, u16>,
 }
 
 impl Default for MeshBuilder {
@@ -328,8 +328,7 @@ impl MeshBuilder {
                     // only a slice.  Not sure that's an improvement.
                 .collect::<Vec<_>>();
             let tris = tris.chunks(3);
-            let builder: &mut t::BuffersBuilder<_, _, _> =
-                &mut t::BuffersBuilder::new(&mut self.buffer, VertexBuilder);
+            let builder = &mut t::BuffersBuilder::new(&mut self.buffer, VertexBuilder);
             use lyon::tessellation::GeometryBuilder;
             builder.begin_geometry();
             for tri in tris {
