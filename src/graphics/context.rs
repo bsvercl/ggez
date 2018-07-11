@@ -21,7 +21,7 @@ use vulkano::image::{
 };
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
-use vulkano::pipeline::viewport::Viewport;
+use vulkano::pipeline::viewport::{Scissor, Viewport};
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 use vulkano::sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode};
 use vulkano::swapchain::{
@@ -176,7 +176,7 @@ impl GraphicsContext {
                 .vertex_input(OneVertexOneInstanceDefinition::<Vertex, InstanceProperties>::new())
                 .vertex_shader(vertex_shader.main_entry_point(), ())
                 .triangle_list()
-                .viewports_dynamic_scissors_irrelevant(1)
+                .viewports_scissors_dynamic(1)
                 .fragment_shader(fragment_shader.main_entry_point(), ())
                 .blend_alpha_blending()
                 .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
@@ -496,7 +496,10 @@ impl GraphicsContext {
                 dimensions: [self.dimensions[0] as f32, self.dimensions[1] as f32],
                 depth_range: 0.0..1.0,
             }]),
-            scissors: None,
+            scissors: Some(vec![Scissor {
+                origin: [0, 0],
+                dimensions: self.dimensions,
+            }]),
         }
     }
 
