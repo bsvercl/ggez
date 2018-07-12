@@ -237,7 +237,7 @@ impl Drawable for Image {
             src_height * self.height as f32,
             1.0,
         );
-        let new_param = param.mul(Matrix4::new_nonuniform_scaling(&real_scale));
+        let new_param = param * Matrix4::new_nonuniform_scaling(&real_scale);
 
         gfx.draw(&[new_param], None, None, Some(self.texture.clone()));
 
