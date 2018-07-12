@@ -95,7 +95,8 @@ impl GraphicsContext {
 
         let window_builder = winit::WindowBuilder::new()
             .with_title(window_setup.title.clone())
-            .with_transparency(window_setup.transparent);
+            .with_transparency(window_setup.transparent)
+            .with_resizable(window_mode.resizable);
         let surface = window_builder
             .build_vk_surface(events_loop, instance.clone())
             .unwrap();
