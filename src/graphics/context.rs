@@ -465,19 +465,37 @@ impl GraphicsContext {
         };
 
         let vertex_buffer = vertex_buffer.unwrap_or_else(|| self.quad_vertex_buffer.clone());
+        // TODO: Use this
         let index_buffer = index_buffer.unwrap_or_else(|| self.quad_index_buffer.clone());
 
+        // let secondary_command_buffer = Arc::new(
+        //     AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+        //         self.device.clone(),
+        //         self.queue.family(),
+        //         self.pipeline.clone().subpass(),
+        //     ).unwrap()
+        //         .draw_indexed(
+        //             self.pipeline.clone(),
+        //             self.dynamic_state(),
+        //             vec![vertex_buffer, instance_buffer],
+        //             index_buffer,
+        //             descriptor,
+        //             (),
+        //         )
+        //         .unwrap()
+        //         .build()
+        //         .unwrap(),
+        // );
         let secondary_command_buffer = Arc::new(
             AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
                 self.device.clone(),
                 self.queue.family(),
                 self.pipeline.clone().subpass(),
             ).unwrap()
-                .draw_indexed(
+                .draw(
                     self.pipeline.clone(),
                     self.dynamic_state(),
                     vec![vertex_buffer, instance_buffer],
-                    index_buffer,
                     descriptor,
                     (),
                 )

@@ -31,7 +31,7 @@ mod types;
 use mint;
 use nalgebra as na;
 
-// pub mod spritebatch;
+pub mod spritebatch;
 
 // pub use self::canvas::*;
 pub(crate) use self::context::*;
@@ -269,6 +269,13 @@ pub fn rectangle(ctx: &mut Context, color: Color, mode: DrawMode, rect: Rect) ->
 
 /// Get the default filter mode for new images.
 pub fn get_default_filter(ctx: &Context) -> FilterMode {
+    unimplemented!()
+}
+
+/// Returns a string that tells a little about the obtained rendering mode.
+/// It is supposed to be human-readable and will change; do not try to parse
+/// information out of it!
+pub fn get_renderer_info(ctx: &Context) -> GameResult<String> {
     unimplemented!()
 }
 
