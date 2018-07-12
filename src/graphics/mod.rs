@@ -42,6 +42,7 @@ pub use self::mesh::*;
 // pub use self::text::*;
 pub use self::types::*;
 
+/// Internal structure containing vertex data.
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
     position: [f32; 2],
