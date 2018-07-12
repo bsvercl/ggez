@@ -43,7 +43,7 @@ pub use self::mesh::*;
 pub use self::types::*;
 
 #[derive(Copy, Clone, Debug)]
-pub(crate) struct Vertex {
+pub struct Vertex {
     position: [f32; 2],
     texcoord: [f32; 2],
 }
