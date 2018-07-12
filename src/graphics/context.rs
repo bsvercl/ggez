@@ -113,7 +113,15 @@ impl GraphicsContext {
                 .unwrap_or([window_mode.width as u32, window_mode.height as u32]);
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
             // TODO: Srgb?
-            let format = caps.supported_formats[0].0;
+            let format = caps.supported_formats
+                .iter()
+                .max_by_key(|format| match format {
+                    (Format::R8G8B8A8Srgb, ColorSpace::SrgbNonLinear) => 2,
+                    (Format::R8G8B8A8Unorm, ColorSpace::SrgbNonLinear) => 1,
+                    _ => 0,
+                })
+                .unwrap()
+                .0;
 
             let present_mode = if window_setup.vsync {
                 PresentMode::Fifo
