@@ -423,7 +423,9 @@ pub fn apply_transformations(ctx: &mut Context) {
 /// size to make sure everything is what you want it to be.
 pub fn set_mode(context: &mut Context, mode: WindowMode) -> GameResult {
     let gfx = &mut context.gfx_context;
-    gfx.set_window_mode(mode)
+    gfx.set_window_mode(mode)?;
+    context.conf.window_mode = mode;
+    Ok(())
 }
 
 /// Sets the window to fullscreen or back.
@@ -433,11 +435,18 @@ pub fn set_fullscreen(context: &mut Context, fullscreen: conf::FullscreenType) -
     set_mode(context, window_mode)
 }
 
-/// Sets the window resolution based on the specified width and height.
+/// Sets the window size/resolution to the specified width and height.
 pub fn set_resolution(context: &mut Context, width: f32, height: f32) -> GameResult {
     let mut window_mode = context.conf.window_mode;
     window_mode.width = width;
     window_mode.height = height;
+    set_mode(context, window_mode)
+}
+
+/// Sets whether or not the window is resizable.
+pub fn set_resizable(context: &mut Context, resizable: bool) -> GameResult {
+    let mut window_mode = context.conf.window_mode;
+    window_mode.resizable = resizable;
     set_mode(context, window_mode)
 }
 
@@ -480,8 +489,10 @@ pub fn get_size(context: &Context) -> (f64, f64) {
         .unwrap_or((0.0, 0.0))
 }
 
-/// TODO: Really need to figure out whether all of ggez's pixel
-/// stuff is in physical or logical pixels...
+/// Returns the hidpi pixel scaling factor that ggez
+/// is currently using.  If  `conf::WindowMode::hidpi`
+/// is true this is equal to `get_os_hidpi_factor()`,
+/// otherwise it is `1.0`.
 pub fn get_hidpi_factor(ctx: &Context) -> f32 {
     ctx.gfx_context.hidpi_factor
 }
