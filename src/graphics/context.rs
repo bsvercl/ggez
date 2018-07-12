@@ -1,32 +1,19 @@
-use std::iter;
-use std::mem;
 use std::sync::Arc;
-use vulkano::buffer::{
-    BufferAccess, BufferUsage, CpuBufferPool, ImmutableBuffer, TypedBufferAccess,
-};
+use vulkano::buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer};
 use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
-use vulkano::command_buffer::pool::{CommandPoolAlloc, StandardCommandPool};
-use vulkano::command_buffer::{
-    AutoCommandBuffer, AutoCommandBufferBuilder, CommandBuffer, DrawIndirectCommand, DynamicState,
-};
-use vulkano::descriptor::descriptor_set::{
-    DescriptorSetDesc, FixedSizeDescriptorSet, FixedSizeDescriptorSetsPool,
-};
-use vulkano::descriptor::{DescriptorSet, PipelineLayoutAbstract};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer, DynamicState};
+use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
-use vulkano::format::{self, Format};
+use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{
-    AttachmentImage, Dimensions, ImageAccess, ImageViewAccess, ImmutableImage, SwapchainImage,
-};
+use vulkano::image::{Dimensions, ImageViewAccess, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
 use vulkano::pipeline::viewport::{Scissor, Viewport};
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 use vulkano::sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode};
 use vulkano::swapchain::{
-    self, AcquireError, PresentMode, Surface, SurfaceTransform, Swapchain, SwapchainAcquireFuture,
-    SwapchainCreationError,
+    self, AcquireError, PresentMode, Surface, SurfaceTransform, Swapchain, SwapchainCreationError,
 };
 use vulkano::sync::{self, GpuFuture};
 use vulkano_win::{self, VkSurfaceBuild};
@@ -125,6 +112,7 @@ impl GraphicsContext {
             dimensions = caps.current_extent
                 .unwrap_or([window_mode.width as u32, window_mode.height as u32]);
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
+            // TODO: Srgb?
             let format = caps.supported_formats[0].0;
 
             let present_mode = if window_setup.vsync {
@@ -551,8 +539,8 @@ impl GraphicsContext {
                         panic!("{:?}", e);
                     }
                 };
-            mem::replace(&mut self.swapchain, new_swapchain);
-            mem::replace(&mut self.swapchain_images, new_swapchain_images);
+            self.swapchain = new_swapchain;
+            self.swapchain_images = new_swapchain_images;
 
             self.framebuffers = None;
             self.recreate_swapchain = false;
@@ -573,7 +561,7 @@ impl GraphicsContext {
                     })
                     .collect::<Vec<_>>(),
             );
-            mem::replace(&mut self.framebuffers, new_framebuffers);
+            self.framebuffers = new_framebuffers;
         }
 
         let (image_num, acquire_future) =

@@ -11,7 +11,7 @@
 use super::types::FilterMode;
 use context::Context;
 use error;
-use graphics::{self, DrawTransform, InstanceProperties};
+use graphics::{self, DrawTransform};
 use GameResult;
 
 /// A `SpriteBatch` draws a number of copies of the same image, using a single draw call.
