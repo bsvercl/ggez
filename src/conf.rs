@@ -130,6 +130,12 @@ impl WindowMode {
         self
     }
 
+    /// Set resizable
+    pub fn resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
+        self
+    }
+
     /// Sets whether or not to allow hidpi.
     pub fn hidpi(mut self, hidpi: bool) -> Self {
         self.hidpi = hidpi;
