@@ -116,8 +116,8 @@ impl GraphicsContext {
             let format = caps.supported_formats
                 .iter()
                 .max_by_key(|format| match format {
-                    (Format::R8G8B8A8Srgb, ColorSpace::SrgbNonLinear) => 2,
-                    (Format::R8G8B8A8Unorm, ColorSpace::SrgbNonLinear) => 1,
+                    (Format::R8G8B8A8Srgb, _) => 2,
+                    (Format::R8G8B8A8Unorm, _) => 1,
                     _ => 0,
                 })
                 .unwrap()
@@ -224,43 +224,8 @@ impl GraphicsContext {
             0.0,
         ).unwrap();
 
-        // let white_image = Image::make_raw(
-        //     queue.clone(),
-        //     sampler.clone(),
-        //     1,
-        //     1,
-        //     [255, 255, 255, 255].iter().cloned(),
-        //     swapchain.format(),
-        // )?;
-
-        // TODO: Workaround this. Use the above instead.
-        // I really can't figure it out.
-        let white_image = {
-            use image;
-            use vulkano::image::ImmutableImage;
-
-            let image = image::load_from_memory_with_format(
-                include_bytes!("../../resources/white.png"),
-                image::ImageFormat::PNG,
-            ).unwrap()
-                .to_rgba();
-            let (width, height) = image.dimensions();
-            let image_data = image.into_raw().clone();
-
-            let (texture, _) = ImmutableImage::from_iter(
-                image_data.iter().cloned(),
-                Dimensions::Dim2d { width, height },
-                swapchain.format(),
-                queue.clone(),
-            ).unwrap();
-
-            Image {
-                texture,
-                sampler: sampler.clone(),
-                width,
-                height,
-            }
-        };
+        let white_image =
+            Image::make_raw(&queue.clone(), sampler.clone(), 1, 1, &[255, 255, 255, 255])?;
 
         let initial_projection = Matrix4::identity();
         let initial_transform = Matrix4::identity();
@@ -609,7 +574,6 @@ impl GraphicsContext {
                 vec![self.clear_color.into()],
             )
             .unwrap();
-
         for secondary_command_buffer in self.secondary_command_buffers.drain(..) {
             unsafe {
                 command_buffer = command_buffer
@@ -617,7 +581,6 @@ impl GraphicsContext {
                     .unwrap();
             }
         }
-
         let command_buffer = command_buffer.end_render_pass().unwrap().build().unwrap();
 
         let previous = self.previous_frame_end

@@ -3,12 +3,11 @@ use std::path;
 use std::sync::Arc;
 
 use image;
-use vulkano::buffer::BufferAccess;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, DrawIndirectCommand};
+use vulkano::buffer::BufferUsage;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer};
 use vulkano::device::Queue;
-use vulkano::format::{AcceptsPixels, Format, FormatDesc};
-use vulkano::image::{Dimensions, ImageAccess, ImageViewAccess, ImmutableImage};
-use vulkano::pipeline::GraphicsPipelineAbstract;
+use vulkano::format;
+use vulkano::image::{Dimensions, ImmutableImage};
 use vulkano::sampler::Sampler;
 use vulkano::sync::GpuFuture;
 
@@ -23,7 +22,7 @@ use GameResult;
 #[derive(Clone)]
 pub struct Image {
     // TODO: Rename to shader_view or such.
-    pub(crate) texture: Arc<dyn ImageViewAccess + Send + Sync>,
+    pub(crate) texture: Arc<ImmutableImage<format::R8G8B8A8Srgb>>,
     pub(crate) sampler: Arc<Sampler>,
     // pub(crate) blend_mode: Option<BlendMode>,
     pub(crate) width: u32,
@@ -39,9 +38,6 @@ pub enum ImageFormat {
 }
 
 impl Image {
-    /* TODO: Needs generic Context to work.
-     */
-
     /// Load a new image from the file at the given path.
     pub fn new<P: AsRef<path::Path>>(context: &mut Context, path: P) -> GameResult<Self> {
         let img = {
@@ -51,21 +47,16 @@ impl Image {
             image::load_from_memory(&buf)?.to_rgba()
         };
         let (width, height) = img.dimensions();
-        Self::from_rgba8(context, width, height, img.into_raw().iter().cloned())
+        Self::from_rgba8(context, width, height, &img)
     }
 
     /// Creates a new `Image` from the given buffer of `u8` RGBA values.
-    pub fn from_rgba8<P, I>(
+    pub fn from_rgba8(
         context: &mut Context,
         width: u32,
         height: u32,
-        rgba: I,
-    ) -> GameResult<Self>
-    where
-        P: Send + Sync + Clone + 'static,
-        I: ExactSizeIterator<Item = P>,
-        Format: AcceptsPixels<P>,
-    {
+        rgba: &[u8],
+    ) -> GameResult<Self> {
         let debug_id = DebugId::get(context);
         let gfx = &context.gfx_context;
         Self::make_raw(
@@ -74,31 +65,51 @@ impl Image {
             width,
             height,
             rgba,
-            gfx.get_format(),
-            // debug_id,
         )
     }
 
     /// Dumps the `Image`'s data to a `Vec` of `u8` RGBA values.
     pub fn to_rgba8(&self, ctx: &mut Context) -> GameResult<Vec<u8>> {
-        unimplemented!()
+        // TODO: A different type when it's possible to read from an ImmutableBuffer
+        use vulkano::buffer::CpuAccessibleBuffer;
+
+        let gfx = &mut ctx.gfx_context;
+
+        let buffer = CpuAccessibleBuffer::from_iter(
+            gfx.device.clone(),
+            BufferUsage::transfer_destination(),
+            (0..self.width as usize * self.height as usize * 4).map(|_| 0u8),
+        ).unwrap();
+
+        // TODO: This doesn't work, yet.
+        let cb = AutoCommandBufferBuilder::primary(gfx.device.clone(), gfx.queue.family())
+            .unwrap()
+            .copy_image_to_buffer(self.texture.clone(), buffer.clone())
+            .unwrap()
+            .build()
+            .unwrap();
+        let _ = cb.execute(gfx.queue.clone())
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
+
+        let content = buffer.read().unwrap();
+        Ok(content.to_vec())
     }
 
-    pub(crate) fn make_raw<P, F, I>(
+    pub(crate) fn make_raw(
         queue: &Arc<Queue>,
         sampler: Arc<Sampler>,
         width: u32,
         height: u32,
-        rgba: I,
-        format: F,
-        // debug_id: DebugId,
-    ) -> GameResult<Self>
-    where
-        P: Send + Sync + Clone + 'static,
-        F: FormatDesc + AcceptsPixels<P> + 'static + Send + Sync,
-        I: ExactSizeIterator<Item = P>,
-        Format: AcceptsPixels<P>,
-    {
+        rgba: &[u8],
+    ) -> GameResult<Self> {
+        use std::iter;
+        use vulkano::buffer::ImmutableBuffer;
+        use vulkano::image::{ImageLayout, ImageUsage};
+
         if width == 0 || height == 0 {
             let msg = format!(
                 "Tried to create a texture of size {}x{}, each dimension must
@@ -120,12 +131,36 @@ impl Image {
             return Err(GameError::ResourceLoadError(msg));
         }
 
-        let (texture, _future) = ImmutableImage::from_iter(
-            rgba,
+        // let (buffer, buffer_future) = ImmutableBuffer::from_iter(
+        //     rgba.iter().cloned(),
+        //     BufferUsage::transfer_source(),
+        //     queue.clone(),
+        // ).unwrap();
+        // let (texture, texture_future) = ImmutableImage::from_buffer(
+        //     buffer.clone(),
+        //     Dimensions::Dim2d { width, height },
+        //     format::R8G8B8A8Srgb,
+        //     queue.clone(),
+        // ).unwrap();
+
+        // let _ = buffer_future
+        //     .join(texture_future)
+        //     .then_signal_fence_and_flush()
+        //     .unwrap()
+        //     .wait(None)
+        //     .unwrap();
+
+        let (texture, future) = ImmutableImage::from_iter(
+            rgba.iter().cloned(),
             Dimensions::Dim2d { width, height },
-            format,
+            format::R8G8B8A8Srgb,
             queue.clone(),
         ).unwrap();
+        future
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
 
         Ok(Self {
             texture,
@@ -159,23 +194,19 @@ impl Image {
         }
     }
 
-    /* TODO: Needs generic context
-
     /// A little helper function that creates a new Image that is just
     /// a solid square of the given size and color.  Mainly useful for
     /// debugging.
-    pub fn solid(context: &mut Context, size: u16, color: Color) -> GameResult<Self> {
-        // let pixel_array: [u8; 4] = color.into();
+    pub fn solid(ctx: &mut Context, size: u32, color: Color) -> GameResult<Self> {
         let (r, g, b, a) = color.into();
         let pixel_array: [u8; 4] = [r, g, b, a];
         let size_squared = size as usize * size as usize;
         let mut buffer = Vec::with_capacity(size_squared);
-        for _i in 0..size_squared {
+        for _ in 0..size_squared {
             buffer.extend(&pixel_array[..]);
         }
-        Image::from_rgba8(context, size, size, &buffer)
+        Self::from_rgba8(ctx, size, size, &buffer)
     }
-    */
 
     /// Return the width of the image.
     pub fn width(&self) -> u32 {
