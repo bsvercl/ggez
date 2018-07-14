@@ -84,7 +84,8 @@ impl event::EventHandler for MainState {
 // Loading a config file depends on having FS (or we can just fake our way around it
 // by creating an FS and then throwing it away; the costs are not huge.)
 pub fn main() -> GameResult {
-    let c = conf::Conf::new();
+    let mut c = conf::Conf::new();
+    c.window_setup = c.window_setup.vsync(false);
     println!("Starting with default config: {:#?}", c);
     let (ctx, events_loop) = &mut Context::load_from_conf("spritebatch", "ggez", c)?;
 
