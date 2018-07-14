@@ -75,7 +75,7 @@ pub(crate) mod fs {
     struct Dummy;
 }
 
-const QUAD_VERTICES: [Vertex; 4] = [
+const QUAD_VERTICES: [Vertex; 6] = [
     Vertex {
         position: [0.0, 0.0],
         texcoord: [0.0, 0.0],
@@ -83,6 +83,14 @@ const QUAD_VERTICES: [Vertex; 4] = [
     Vertex {
         position: [1.0, 0.0],
         texcoord: [1.0, 0.0],
+    },
+    Vertex {
+        position: [1.0, 1.0],
+        texcoord: [1.0, 1.0],
+    },
+    Vertex {
+        position: [0.0, 0.0],
+        texcoord: [0.0, 0.0],
     },
     Vertex {
         position: [1.0, 1.0],

@@ -451,28 +451,34 @@ impl GraphicsContext {
         };
 
         let vertex_buffer = vertex_buffer.unwrap_or_else(|| self.quad_vertex_buffer.clone());
-        // TODO: Use this
-        let index_buffer = index_buffer.unwrap_or_else(|| self.quad_index_buffer.clone());
 
-        let secondary_command_buffer = Arc::new(
-                    AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+        let mut cb = AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
                         self.device.clone(),
                 self.queue.family(),
                         self.pipeline.clone().subpass(),
-                    ).unwrap()
-                        .draw(
+        ).unwrap();
+
+        cb = match index_buffer {
+            Some(index_buffer) => cb.draw_indexed(
+                self.pipeline.clone(),
+                self.dynamic_state(),
+                vec![vertex_buffer, instance_buffer],
+                index_buffer,
+                descriptor,
+                (),
+            ).unwrap(),
+            None => cb.draw(
                             self.pipeline.clone(),
                             self.dynamic_state(),
                             vec![vertex_buffer, instance_buffer],
                             descriptor,
                             (),
-                        )
-                        .unwrap()
-                        .build()
-                        .unwrap(),
-        );
-        self.secondary_command_buffers
-            .push(secondary_command_buffer);
+            ).unwrap(),
+        };
+
+        let cb = Arc::new(cb.build().unwrap());
+
+        self.secondary_command_buffers.push(cb);
     }
 
     pub(crate) fn dynamic_state(&self) -> DynamicState {
