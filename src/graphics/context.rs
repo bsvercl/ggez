@@ -74,7 +74,23 @@ impl GraphicsContext {
             Instance::new(None, &extensions, None).unwrap()
         };
 
-        let physical_device = PhysicalDevice::enumerate(&instance).next().unwrap();
+        let physical_device = {
+            let mut available_devices = PhysicalDevice::enumerate(&instance).collect::<Vec<_>>();
+            println!("Available physical devices:");
+            for physical in &available_devices {
+                println!("\t{}", physical.name());
+            }
+            available_devices.sort_by_key(|physical| {
+                use vulkano::instance::PhysicalDeviceType;
+                match physical.ty() {
+                    PhysicalDeviceType::DiscreteGpu => 0,
+                    PhysicalDeviceType::IntegratedGpu => 1,
+                    _ => 2,
+                }
+            });
+            available_devices.iter().cloned().next().unwrap()
+        };
+
         println!(
             "Using device: {} (type: {:?})",
             physical_device.name(),
