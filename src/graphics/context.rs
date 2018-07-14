@@ -129,6 +129,19 @@ impl GraphicsContext {
                 PresentMode::Immediate
             };
 
+            let present_mode = {
+                let modes = caps.present_modes;
+                let mut current_mode = PresentMode::Immediate;
+                if window_setup.vsync {
+                    if modes.supports(PresentMode::Mailbox) {
+                        current_mode = PresentMode::Mailbox;
+                    } else if modes.supports(PresentMode::Fifo) {
+                        current_mode = PresentMode::Fifo;
+                    }
+                }
+                current_mode
+            };
+
             Swapchain::new(
                 device.clone(),
                 surface.clone(),
