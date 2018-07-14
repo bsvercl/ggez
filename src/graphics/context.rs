@@ -123,10 +123,14 @@ impl GraphicsContext {
                 .unwrap()
                 .0;
 
-            let present_mode = if window_setup.vsync {
-                PresentMode::Fifo
-            } else {
-                PresentMode::Immediate
+            let image_count = {
+                let mut count = caps.min_image_count + 1;
+                if let Some(max_image_count) = caps.max_image_count {
+                    if count > max_image_count {
+                        count = max_image_count;
+                    }
+                }
+                count
             };
 
             let present_mode = {
@@ -145,7 +149,7 @@ impl GraphicsContext {
             Swapchain::new(
                 device.clone(),
                 surface.clone(),
-                caps.min_image_count,
+                image_count,
                 format,
                 dimensions,
                 1,
