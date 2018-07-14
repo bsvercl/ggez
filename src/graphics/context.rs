@@ -147,6 +147,11 @@ impl GraphicsContext {
                 current_mode
             };
 
+            println!(
+                "Format: {:?}. Present mode: {:?}. Image count: {}.",
+                format, present_mode, image_count
+            );
+
             Swapchain::new(
                 device.clone(),
                 surface.clone(),
