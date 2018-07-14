@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer};
 use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
@@ -6,7 +7,7 @@ use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{Dimensions, ImageViewAccess, SwapchainImage};
+use vulkano::image::{ImageViewAccess, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
 use vulkano::pipeline::viewport::{Scissor, Viewport};
@@ -36,7 +37,7 @@ pub(crate) struct GraphicsContext {
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     pub(crate) pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
-    previous_frame_end: Option<Box<dyn GpuFuture>>,
+    previous_frame_end: Option<Box<dyn GpuFuture + Send + Sync>>,
     recreate_swapchain: bool,
     pub(crate) clear_color: [f32; 4],
     dimensions: [u32; 2],
@@ -198,16 +199,23 @@ impl GraphicsContext {
                 .unwrap(),
         );
 
-        let (quad_vertex_buffer, _) = ImmutableBuffer::from_iter(
+        let (quad_vertex_buffer, vertex_future) = ImmutableBuffer::from_iter(
             QUAD_VERTICES.iter().cloned(),
             BufferUsage::vertex_buffer(),
             queue.clone(),
         ).unwrap();
-        let (quad_index_buffer, _) = ImmutableBuffer::from_iter(
+        let (quad_index_buffer, index_future) = ImmutableBuffer::from_iter(
             QUAD_INDICES.iter().cloned(),
             BufferUsage::index_buffer(),
             queue.clone(),
         ).unwrap();
+
+        let _ = vertex_future
+            .join(index_future)
+            .then_signal_fence_and_flush()
+            .unwrap()
+            .wait(None)
+            .unwrap();
 
         // let sampler = Sampler::simple_repeat_linear(device.clone());
         let sampler = Sampler::new(
@@ -435,7 +443,7 @@ impl GraphicsContext {
 
         let instance_buffer = {
             let instances = params
-                .iter()
+                .par_iter()
                 // TODO: Use srgb?
                 .map(|param| param.to_instance_properties(false))
                 .collect::<Vec<_>>();
@@ -464,25 +472,53 @@ impl GraphicsContext {
         //         .build()
         //         .unwrap(),
         // );
-        let secondary_command_buffer = Arc::new(
-            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
-                self.device.clone(),
-                self.queue.family(),
-                self.pipeline.clone().subpass(),
-            ).unwrap()
-                .draw(
-                    self.pipeline.clone(),
-                    self.dynamic_state(),
-                    vec![vertex_buffer, instance_buffer],
-                    descriptor,
-                    (),
-                )
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
+        use rayon;
+
+        let mut secondary = Vec::new();
+        rayon::scope(|s| {
+            s.spawn(|_| {
+                secondary.push(Arc::new(
+                    AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+                        self.device.clone(),
+                        self.queue.clone().family(),
+                        self.pipeline.clone().subpass(),
+                    ).unwrap()
+                        .draw(
+                            self.pipeline.clone(),
+                            self.dynamic_state(),
+                            vec![vertex_buffer, instance_buffer],
+                            descriptor,
+                            (),
+                        )
+                        .unwrap()
+                        .build()
+                        .unwrap(),
+                ));
+            });
+        });
         self.secondary_command_buffers
-            .push(secondary_command_buffer);
+            .push(secondary.first().unwrap().clone());
+
+        // let cb = self.thread_pool.install(|| {
+        //     Arc::new(
+        //         AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+        //             self.device.clone(),
+        //             self.queue.clone().family(),
+        //             self.pipeline.clone().subpass(),
+        //         ).unwrap()
+        //             .draw(
+        //                 self.pipeline.clone(),
+        //                 self.dynamic_state(),
+        //                 vec![vertex_buffer, instance_buffer],
+        //                 descriptor,
+        //                 (),
+        //             )
+        //             .unwrap()
+        //             .build()
+        //             .unwrap(),
+        //     )
+        // });
+        // self.secondary_command_buffers.push(cb);
     }
 
     pub(crate) fn dynamic_state(&self) -> DynamicState {

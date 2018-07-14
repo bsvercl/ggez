@@ -87,7 +87,6 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
-        // TODO: This will block until it's complete
         let _ = cb.execute(gfx.queue.clone())
             .unwrap()
             .then_signal_fence_and_flush()
@@ -156,7 +155,6 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
-        // TODO: This will block until it's complete
         let _ = buffer_future
             .then_execute(queue.clone(), cb)
             .unwrap()
