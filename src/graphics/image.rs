@@ -7,7 +7,7 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer};
 use vulkano::device::Queue;
 use vulkano::format;
-use vulkano::image::{Dimensions, ImmutableImage};
+use vulkano::image::{Dimensions, StorageImage};
 use vulkano::sampler::Sampler;
 use vulkano::sync::GpuFuture;
 
@@ -22,7 +22,7 @@ use GameResult;
 #[derive(Clone)]
 pub struct Image {
     // TODO: Rename to shader_view or such.
-    pub(crate) texture: Arc<ImmutableImage<format::R8G8B8A8Srgb>>,
+    pub(crate) texture: Arc<StorageImage<format::R8G8B8A8Srgb>>,
     pub(crate) sampler: Arc<Sampler>,
     // pub(crate) blend_mode: Option<BlendMode>,
     pub(crate) width: u32,
@@ -81,7 +81,6 @@ impl Image {
             (0..self.width as usize * self.height as usize * 4).map(|_| 0u8),
         ).unwrap();
 
-        // TODO: This doesn't work, yet.
         let cb = AutoCommandBufferBuilder::primary(gfx.device.clone(), gfx.queue.family())
             .unwrap()
             .copy_image_to_buffer(self.texture.clone(), buffer.clone())
@@ -108,7 +107,7 @@ impl Image {
     ) -> GameResult<Self> {
         use std::iter;
         use vulkano::buffer::ImmutableBuffer;
-        use vulkano::image::{ImageLayout, ImageUsage};
+        use vulkano::image::ImageUsage;
 
         if width == 0 || height == 0 {
             let msg = format!(
@@ -131,32 +130,34 @@ impl Image {
             return Err(GameError::ResourceLoadError(msg));
         }
 
-        // let (buffer, buffer_future) = ImmutableBuffer::from_iter(
-        //     rgba.iter().cloned(),
-        //     BufferUsage::transfer_source(),
-        //     queue.clone(),
-        // ).unwrap();
-        // let (texture, texture_future) = ImmutableImage::from_buffer(
-        //     buffer.clone(),
-        //     Dimensions::Dim2d { width, height },
-        //     format::R8G8B8A8Srgb,
-        //     queue.clone(),
-        // ).unwrap();
-
-        // let _ = buffer_future
-        //     .join(texture_future)
-        //     .then_signal_fence_and_flush()
-        //     .unwrap()
-        //     .wait(None)
-        //     .unwrap();
-
-        let (texture, future) = ImmutableImage::from_iter(
+        let (buffer, buffer_future) = ImmutableBuffer::from_iter(
             rgba.iter().cloned(),
-            Dimensions::Dim2d { width, height },
-            format::R8G8B8A8Srgb,
+            BufferUsage::transfer_source(),
             queue.clone(),
         ).unwrap();
-        future
+
+        let texture = StorageImage::with_usage(
+            queue.device().clone(),
+            Dimensions::Dim2d { width, height },
+            format::R8G8B8A8Srgb,
+            ImageUsage {
+                transfer_source: true,
+                transfer_destination: true,
+                sampled: true,
+                ..ImageUsage::none()
+            },
+            iter::empty(),
+        ).unwrap();
+
+        let cb = AutoCommandBufferBuilder::primary(queue.device().clone(), queue.family())
+            .unwrap()
+            .copy_buffer_to_image(buffer, texture.clone())
+            .unwrap()
+            .build()
+            .unwrap();
+        let _ = buffer_future
+            .then_execute(queue.clone(), cb)
+            .unwrap()
             .then_signal_fence_and_flush()
             .unwrap()
             .wait(None)
