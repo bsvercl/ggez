@@ -70,7 +70,7 @@ impl Image {
 
     /// Dumps the `Image`'s data to a `Vec` of `u8` RGBA values.
     pub fn to_rgba8(&self, ctx: &mut Context) -> GameResult<Vec<u8>> {
-        // TODO: A different type when it's possible to read from an ImmutableBuffer
+        // TODO: Use a different type when it's possible to read from an ImmutableBuffer
         use vulkano::buffer::CpuAccessibleBuffer;
 
         let gfx = &mut ctx.gfx_context;
@@ -87,6 +87,7 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
+        // TODO: This will block until it's complete
         let _ = cb.execute(gfx.queue.clone())
             .unwrap()
             .then_signal_fence_and_flush()
@@ -155,6 +156,7 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
+        // TODO: This will block until it's complete
         let _ = buffer_future
             .then_execute(queue.clone(), cb)
             .unwrap()
