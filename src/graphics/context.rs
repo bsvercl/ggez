@@ -5,9 +5,9 @@ use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer, DynamicState};
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
-use vulkano::format::Format;
+use vulkano::format::{self, Format};
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{ImageViewAccess, SwapchainImage};
+use vulkano::image::{StorageImage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
 use vulkano::pipeline::viewport::{Scissor, Viewport};
@@ -185,9 +185,6 @@ impl GraphicsContext {
             ).unwrap()
         };
 
-        let vertex_shader = vs::Shader::load(device.clone()).unwrap();
-        let fragment_shader = fs::Shader::load(device.clone()).unwrap();
-
         let multisample_samples = window_setup.samples as u32;
 
         let render_pass = Arc::new(
@@ -206,6 +203,9 @@ impl GraphicsContext {
                 }
             ).unwrap(),
         );
+
+        let vertex_shader = vs::Shader::load(device.clone()).unwrap();
+        let fragment_shader = fs::Shader::load(device.clone()).unwrap();
 
         let pipeline = Arc::new(
             GraphicsPipeline::start()
@@ -442,7 +442,7 @@ impl GraphicsContext {
         params: &[DrawTransform],
         vertex_buffer: Option<Arc<ImmutableBuffer<[Vertex]>>>,
         index_buffer: Option<Arc<ImmutableBuffer<[u16]>>>,
-        texture: Option<Arc<dyn ImageViewAccess + Send + Sync>>,
+        texture: Option<Arc<StorageImage<format::R8G8B8A8Srgb>>>,
     ) {
         let descriptor = {
             let uniform_buffer = self.uniform_buffer_pool
