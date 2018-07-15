@@ -271,7 +271,7 @@ impl Drawable for Image {
         );
         let new_param = param * Matrix4::new_nonuniform_scaling(&real_scale);
 
-        gfx.draw(&[new_param], None, None, Some(self.texture.clone()));
+        gfx.draw(&[new_param], None, None, Some(self.texture.clone()), None);
 
         Ok(())
     }

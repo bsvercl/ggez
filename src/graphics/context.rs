@@ -443,6 +443,7 @@ impl GraphicsContext {
         vertex_buffer: Option<Arc<ImmutableBuffer<[Vertex]>>>,
         index_buffer: Option<Arc<ImmutableBuffer<[u16]>>>,
         texture: Option<Arc<StorageImage<format::R8G8B8A8Srgb>>>,
+        sampler: Option<Arc<Sampler>>,
     ) {
         let descriptor = {
             let uniform_buffer = self.uniform_buffer_pool
@@ -452,11 +453,12 @@ impl GraphicsContext {
                 .unwrap();
 
             let current_texture = texture.unwrap_or_else(|| self.white_image.texture.clone());
+            let sampler = sampler.unwrap_or_else(|| self.default_sampler.clone());
             self.descriptor_pool
                 .next()
                 .add_buffer(uniform_buffer)
                 .unwrap()
-                .add_sampled_image(current_texture, self.default_sampler.clone())
+                .add_sampled_image(current_texture, sampler)
                 .unwrap()
                 .build()
                 .unwrap()

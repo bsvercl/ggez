@@ -537,6 +537,7 @@ impl Drawable for Mesh {
             Some(self.vertex_buffer.clone()),
             Some(self.index_buffer.clone()),
             None,
+            None,
         );
 
         Ok(())

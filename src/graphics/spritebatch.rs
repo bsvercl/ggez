@@ -112,7 +112,7 @@ impl graphics::Drawable for SpriteBatch {
         let current_transform = gfx.get_transform();
         gfx.push_transform(param.matrix * current_transform);
         gfx.calculate_transform_matrix();
-        gfx.draw(&params, None, None, Some(self.image.texture.clone()));
+        gfx.draw(&params, None, None, Some(self.image.texture.clone()), None);
         gfx.pop_transform();
         gfx.calculate_transform_matrix();
         Ok(())
