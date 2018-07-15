@@ -191,13 +191,6 @@ impl WindowSetup {
         self
     }
 
-    /*/// Set resizable
-    pub fn resizable(mut self, resizable: bool) -> Self {
-        self.resizable = resizable;
-        self
-    }*/
-    // TODO: winit #540
-
     /// Set number of samples
     ///
     /// Returns None if given an invalid value
@@ -348,7 +341,7 @@ mod tests {
     /// Tries to encode and decode a `Conf` object
     /// and makes sure it gets the same result it had.
     #[test]
-    fn encode_round_trip() {
+    fn headless_encode_round_trip() {
         let c1 = conf::Conf::new();
         let mut writer = Vec::new();
         let _c = c1.to_toml_file(&mut writer).unwrap();

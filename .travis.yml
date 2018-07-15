@@ -4,7 +4,7 @@ rust:
   - stable
   - beta
   - nightly
-  - 1.27
+  - 1.27.1
 os:
   - linux
   - osx
@@ -12,8 +12,12 @@ matrix:
   allow_failures:
     - rust: nightly
 
+script:
+  - cargo test --verbose headless
+
+
 before_install:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then
       sudo apt-get -qq update
-      && sudo apt-get install -y libasound2-dev;
+      && sudo apt-get install -y libasound2-dev libudev-dev;
     fi

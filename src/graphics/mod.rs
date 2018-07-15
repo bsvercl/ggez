@@ -432,6 +432,7 @@ pub fn apply_transformations(ctx: &mut Context) {
 pub fn set_mode(context: &mut Context, mode: WindowMode) -> GameResult {
     let gfx = &mut context.gfx_context;
     gfx.set_window_mode(mode)?;
+    // Save updated mode.
     context.conf.window_mode = mode;
     Ok(())
 }
@@ -458,17 +459,17 @@ pub fn set_resizable(context: &mut Context, resizable: bool) -> GameResult {
     set_mode(context, window_mode)
 }
 
-// use std::path::Path;
-// use winit::Icon;
+use std::path::Path;
+use winit::Icon;
 /// Sets the window icon.
-// pub fn set_window_icon<P: AsRef<Path>>(context: &Context, path: Option<P>) -> GameResult<()> {
-//     let icon = match path {
-//         Some(path) => Some(Icon::from_path(path)?),
-//         None => None,
-//     };
-//     context.gfx_context.window.set_window_icon(icon);
-//     Ok(())
-// }
+pub fn set_window_icon<P: AsRef<Path>>(context: &Context, path: Option<P>) -> GameResult<()> {
+    let icon = match path {
+        Some(path) => Some(Icon::from_path(path)?),
+        None => None,
+    };
+    context.gfx_context.window().set_window_icon(icon);
+    Ok(())
+}
 
 /// Sets the window title.
 pub fn set_window_title(context: &Context, title: &str) {
@@ -503,6 +504,12 @@ pub fn get_size(context: &Context) -> (f64, f64) {
 /// otherwise it is `1.0`.
 pub fn get_hidpi_factor(ctx: &Context) -> f32 {
     ctx.gfx_context.hidpi_factor
+}
+
+/// Returns the hidpi pixel scaling factor that the operating
+/// system says that ggez should be using.
+pub fn get_os_hidpi_factor(context: &Context) -> f32 {
+    context.gfx_context.os_hidpi_factor
 }
 
 /// Returns the size of the window's underlying drawable in pixels as (width, height).

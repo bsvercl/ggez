@@ -18,8 +18,7 @@ use vulkano::swapchain::{
 };
 use vulkano::sync::{self, GpuFuture};
 use vulkano_win::{self, VkSurfaceBuild};
-use winit;
-use winit::dpi;
+use winit::{self, dpi};
 
 use conf::{FullscreenType, WindowMode, WindowSetup};
 use context::DebugId;
@@ -46,6 +45,7 @@ pub(crate) struct GraphicsContext {
     pub(crate) white_image: Image,
     pub(crate) projection: Matrix4,
     pub(crate) hidpi_factor: f32,
+    pub(crate) os_hidpi_factor: f32,
     pub(crate) mvp: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     pub(crate) screen_rect: Rect,
@@ -263,8 +263,11 @@ impl GraphicsContext {
         let top = 0.0;
         let bottom = window_mode.height;
 
+        // See https://docs.rs/winit/0.16.1/winit/dpi/index.html for
+        // an excellent explaination of how this works.
+        let os_hidpi_factor = surface.window().get_hidpi_factor() as f32;
         let hidpi_factor = if window_mode.hidpi {
-            surface.window().get_hidpi_factor() as f32
+            os_hidpi_factor
         } else {
             1.0
         };
@@ -296,6 +299,7 @@ impl GraphicsContext {
             pipeline,
             white_image,
             hidpi_factor,
+            os_hidpi_factor,
         };
         graphics_context.set_window_mode(window_mode)?;
 
@@ -431,10 +435,6 @@ impl GraphicsContext {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn hack_event_hidpi(&self, event: &winit::Event) -> winit::Event {
-        event.clone()
     }
 
     pub(crate) fn draw(
@@ -616,5 +616,28 @@ impl GraphicsContext {
                 println!("{:?}", e);
             }
         }
+    }
+
+    /// This is a filthy hack allow users to override hidpi
+    /// scaling if they want to.  Everything that winit touches
+    /// is scaled by the hidpi factor that it uses, such as monitor
+    /// resolutions and mouse positions.  If you want display-independent
+    /// scaling this is Good, if you want pixel-perfect scaling this
+    /// is Bad.  We are currently operating on the assumption that you want
+    /// pixel-perfect scaling.
+    ///
+    /// See <https://github.com/tomaka/winit/issues/591#issuecomment-403096230>
+    /// and related issues for fuller discussion.
+    pub(crate) fn hack_event_hidpi(&self, event: &winit::Event) -> winit::Event {
+        event.clone()
+    }
+
+    /// Takes a coordinate in winit's Logical scale (aka everything we touch)
+    /// and turns it into the equivalent in PhysicalScale, allowing us to
+    /// override the DPI if necessary.
+    pub(crate) fn to_physical_dpi(&self, x: f32, y: f32) -> (f32, f32) {
+        let logical = dpi::LogicalPosition::new(x as f64, y as f64);
+        let physical = dpi::PhysicalPosition::from_logical(logical, self.hidpi_factor.into());
+        (physical.x as f32, physical.y as f32)
     }
 }

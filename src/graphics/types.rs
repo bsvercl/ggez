@@ -376,7 +376,7 @@ pub enum FilterMode {
 mod tests {
     use super::*;
     #[test]
-    fn test_color_conversions() {
+    fn headless_test_color_conversions() {
         let white = Color::new(1.0, 1.0, 1.0, 1.0);
         let w1 = Color::from((255, 255, 255, 255));
         assert_eq!(white, w1);
@@ -407,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_scaling() {
+    fn headless_test_rect_scaling() {
         let r1 = Rect::new(0.0, 0.0, 128.0, 128.0);
         let r2 = Rect::fraction(0.0, 0.0, 32.0, 32.0, &r1);
         assert_eq!(r2, Rect::new(0.0, 0.0, 0.25, 0.25));
@@ -417,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_contains() {
+    fn headless_test_rect_contains() {
         let r = Rect::new(0.0, 0.0, 128.0, 128.0);
         println!("{} {} {} {}", r.top(), r.bottom(), r.left(), r.right());
         let p = Point2::new(1.0, 1.0);
@@ -428,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_overlaps() {
+    fn headless_test_rect_overlaps() {
         let r1 = Rect::new(0.0, 0.0, 128.0, 128.0);
         let r2 = Rect::new(0.0, 0.0, 64.0, 64.0);
         assert!(r1.overlaps(&r2));
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_transform() {
+    fn headless_test_rect_transform() {
         let mut r1 = Rect::new(0.0, 0.0, 64.0, 64.0);
         let r2 = Rect::new(64.0, 64.0, 64.0, 64.0);
         r1.translate(Vector2::new(64.0, 64.0));

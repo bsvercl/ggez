@@ -51,6 +51,12 @@ impl Image {
     }
 
     /// Creates a new `Image` from the given buffer of `u8` RGBA values.
+    ///
+    /// The pixel layout is row-major.  That is,
+    /// the first 4 `u8` values make the top-left pixel in the `Image`, the
+    /// next 4 make the next pixel in the same row, and so on to the end of
+    /// the row.  The next `width * 4` values make up the second row, and so
+    /// on.
     pub fn from_rgba8(
         context: &mut Context,
         width: u32,
@@ -288,9 +294,7 @@ impl Drawable for Image {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // We need to set up separate unit tests for CI vs non-CI environments; see issue #234
-    // #[test]
-    #[allow(dead_code)]
+    #[test]
     fn test_invalid_image_size() {
         // let c = conf::Conf::new();
         // let (ctx, _) = &mut Context::load_from_conf("unittest", "unittest", c).unwrap();

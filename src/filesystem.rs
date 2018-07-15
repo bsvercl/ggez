@@ -410,6 +410,9 @@ pub fn read_dir<P: AsRef<path::Path>>(
 
 /// Prints the contents of all data directories.
 /// Useful for debugging.
+///
+/// TODO: Should be closer to log_all()...
+/// I feel like they should share a common path.
 pub fn print_all(ctx: &mut Context) {
     ctx.filesystem.print_all()
 }
@@ -473,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_exists() {
+    fn headless_test_file_exists() {
         let f = get_dummy_fs_for_tests();
 
         let tile_file = path::Path::new("/tile.png");
@@ -487,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_dir() {
+    fn headless_test_read_dir() {
         let mut f = get_dummy_fs_for_tests();
 
         let dir_contents_size = f.read_dir("/").unwrap().count();
@@ -495,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_delete_file() {
+    fn headless_test_create_delete_file() {
         let mut fs = get_dummy_fs_for_tests();
         let test_file = path::Path::new("/testfile.txt");
         let bytes = "test".as_bytes();
@@ -515,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_not_found() {
+    fn headless_test_file_not_found() {
         let mut fs = get_dummy_fs_for_tests();
         {
             let rel_file = "testfile.txt";
@@ -538,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn test_write_config() {
+    fn headless_test_write_config() {
         let mut f = get_dummy_fs_for_tests();
         let conf = conf::Conf::new();
         // The config file should end up in

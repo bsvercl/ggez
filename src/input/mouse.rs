@@ -104,8 +104,8 @@ pub fn set_position(ctx: &mut Context, point: Point2) -> GameResult<()> {
     ctx.mouse_context.last_position = point;
     graphics::get_window(ctx)
         .set_cursor_position(dpi::LogicalPosition {
-            x: f64::from(point.x),
-            y: f64::from(point.y),
+            x: point.x as f64,
+            y: point.y as f64,
         })
         .map_err(|_| GameError::WindowError("Couldn't set mouse cursor position!".to_owned()))
 }
@@ -120,12 +120,14 @@ pub fn get_button_pressed(ctx: &Context, button: MouseButton) -> bool {
     ctx.mouse_context.button_pressed(button)
 }
 
-/// TODO: Can we implement this?  Checked with Winit peoples.
+/// TODO: Can we implement this?  Check with Winit peoples.
+/// Winit doesn't implement it itself, we can do it by locking
+/// the cursor to the window and resetting it to center each frame?
 pub fn get_relative_mode() -> bool {
     unimplemented!()
 }
 
-/// TODO: Can we impement this?  Checked with Winit peoples.
+/// TODO: Can we impement this?  Check with Winit peoples.
 pub fn set_relative_mode() {
     unimplemented!()
 }

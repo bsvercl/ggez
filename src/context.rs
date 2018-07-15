@@ -131,6 +131,10 @@ impl Context {
     /// state it needs to, such as detecting window resizes.  If you are
     /// rolling your own event loop, you should call this on the events
     /// you receive before processing them yourself.
+    ///
+    /// This also returns a new version of the `event` that has been modified
+    /// for ggez's optional overriding of hidpi.  For full discussion see
+    /// <https://github.com/tomaka/winit/issues/591#issuecomment-403096230>.
     pub fn process_event(&mut self, event: &winit::Event) -> winit::Event {
         let event = self.gfx_context.hack_event_hidpi(event);
         match event.clone() {
@@ -177,7 +181,7 @@ impl Context {
             },
 
             _ => (),
-        }
+        };
         event
     }
 }
