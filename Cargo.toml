@@ -31,9 +31,9 @@ multithread-image-decoding = ["image/hdr", "image/jpeg_rayon"]
 bitflags = "1.0"
 zip = { version = "0.4", default-features = false }
 app_dirs2 = "2"
-vulkano =  { git = "https://github.com/vulkano-rs/vulkano" }
-vulkano-shader-derive =  { git = "https://github.com/vulkano-rs/vulkano" }
-vulkano-win = { git = "https://github.com/vulkano-rs/vulkano" }
+vulkano = { git = "https://github.com/bsvercl/vulkano" }
+vulkano-shader-derive =  { git = "https://github.com/bsvercl/vulkano" }
+vulkano-win = { git = "https://github.com/bsvercl/vulkano" }
 image = {version = "0.19", default-features = false, features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm",
 "tga", "tiff", "webp", "bmp", "dxt", ] }
 rodio = "0.8"

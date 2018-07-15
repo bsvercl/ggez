@@ -474,6 +474,7 @@ impl GraphicsContext {
         };
 
         let vertex_buffer = vertex_buffer.unwrap_or_else(|| self.quad_vertex_buffer.clone());
+        let index_buffer = index_buffer.unwrap_or_else(|| self.quad_index_buffer.clone());
 
         let mut cb = AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
             self.device.clone(),
@@ -481,23 +482,14 @@ impl GraphicsContext {
             self.pipeline.clone().subpass(),
         ).unwrap();
 
-        cb = match index_buffer {
-            Some(index_buffer) => cb.draw_indexed(
+        cb = cb.draw_indexed(
                 self.pipeline.clone(),
                 self.dynamic_state(),
                 vec![vertex_buffer, instance_buffer],
                 index_buffer,
                 descriptor,
                 (),
-            ).unwrap(),
-            None => cb.draw(
-                self.pipeline.clone(),
-                self.dynamic_state(),
-                vec![vertex_buffer, instance_buffer],
-                descriptor,
-                (),
-            ).unwrap(),
-        };
+        ).unwrap();
 
         let cb = Arc::new(cb.build().unwrap());
 
