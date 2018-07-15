@@ -483,12 +483,12 @@ impl GraphicsContext {
         ).unwrap();
 
         cb = cb.draw_indexed(
-                self.pipeline.clone(),
-                self.dynamic_state(),
-                vec![vertex_buffer, instance_buffer],
-                index_buffer,
-                descriptor,
-                (),
+            self.pipeline.clone(),
+            self.dynamic_state(),
+            vec![vertex_buffer, instance_buffer],
+            index_buffer,
+            descriptor,
+            (),
         ).unwrap();
 
         let cb = Arc::new(cb.build().unwrap());
