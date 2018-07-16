@@ -306,10 +306,12 @@ pub fn set_default_filter(ctx: &mut Context, mode: FilterMode) {
 ///
 /// The `Rect`'s x and y will define the top-left corner of the screen,
 /// and that plus its w and h will define the bottom-right corner.
-pub fn set_screen_coordinates(ctx: &mut Context, rect: Rect) {
+pub fn set_screen_coordinates(ctx: &mut Context, rect: Rect) -> GameResult {
+    // This only returns a `GameResult` to keep consistent with original api
     let gfx = &mut ctx.gfx_context;
     gfx.set_projection_rect(rect);
     gfx.calculate_transform_matrix();
+    Ok(())
 }
 
 /// Sets the raw projection matrix to the given homogeneous
