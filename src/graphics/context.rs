@@ -6,7 +6,7 @@ use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer, DynamicSt
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::{self, Format};
-use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
+use vulkano::framebuffer::{Framebuffer, RenderPassAbstract, Subpass};
 use vulkano::image::{StorageImage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
@@ -35,27 +35,25 @@ pub(crate) struct GraphicsContext {
     swapchain_images: Vec<Arc<SwapchainImage<winit::Window>>>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     pub(crate) pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
-    previous_frame_end: Option<Box<dyn GpuFuture + Send + Sync>>,
+    previous_frame_end: Option<Box<dyn GpuFuture>>,
     recreate_swapchain: bool,
     pub(crate) clear_color: [f32; 4],
     dimensions: [u32; 2],
     pub(crate) multisample_samples: u32,
 
-    pub(crate) white_image: Image,
+    white_image: Image,
     pub(crate) projection: Matrix4,
     pub(crate) hidpi_factor: f32,
     pub(crate) os_hidpi_factor: f32,
-    pub(crate) mvp: Matrix4,
+    mvp: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     pub(crate) screen_rect: Rect,
 
-    pub(crate) descriptor_pool:
-        FixedSizeDescriptorSetsPool<Arc<dyn GraphicsPipelineAbstract + Send + Sync>>,
-    pub(crate) uniform_buffer_pool: CpuBufferPool<vs::ty::Globals>,
+    descriptor_pool: FixedSizeDescriptorSetsPool<Arc<dyn GraphicsPipelineAbstract + Send + Sync>>,
+    uniform_buffer_pool: CpuBufferPool<vs::ty::Globals>,
     instance_buffer_pool: CpuBufferPool<InstanceProperties>,
-    pub(crate) quad_vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
-    pub(crate) quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
+    quad_vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
+    quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
     pub(crate) default_sampler: Arc<Sampler>,
 
     secondary_command_buffers:
@@ -238,7 +236,6 @@ impl GraphicsContext {
             .wait(None)
             .unwrap();
 
-        // let sampler = Sampler::simple_repeat_linear(device.clone());
         let sampler = Sampler::new(
             device.clone(),
             Filter::Linear,
@@ -287,7 +284,6 @@ impl GraphicsContext {
             clear_color: [0.2, 0.4, 0.6, 1.0],
             default_sampler: sampler,
             dimensions,
-            framebuffers: None,
             recreate_swapchain: true,
             render_pass,
             mvp: Matrix4::identity(),
@@ -476,22 +472,24 @@ impl GraphicsContext {
         let vertex_buffer = vertex_buffer.unwrap_or_else(|| self.quad_vertex_buffer.clone());
         let index_buffer = index_buffer.unwrap_or_else(|| self.quad_index_buffer.clone());
 
-        let mut cb = AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
+        let cb = Arc::new(
+            AutoCommandBufferBuilder::secondary_graphics_one_time_submit(
             self.device.clone(),
             self.queue.family(),
             self.pipeline.clone().subpass(),
-        ).unwrap();
-
-        cb = cb.draw_indexed(
+            ).unwrap()
+                .draw_indexed(
             self.pipeline.clone(),
             self.dynamic_state(),
             vec![vertex_buffer, instance_buffer],
             index_buffer,
             descriptor,
             (),
-        ).unwrap();
-
-        let cb = Arc::new(cb.build().unwrap());
+                )
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
 
         self.secondary_command_buffers.push(cb);
     }
@@ -543,26 +541,7 @@ impl GraphicsContext {
             self.swapchain = new_swapchain;
             self.swapchain_images = new_swapchain_images;
 
-            self.framebuffers = None;
             self.recreate_swapchain = false;
-        }
-
-        if self.framebuffers.is_none() {
-            let new_framebuffers = Some(
-                self.swapchain_images
-                    .iter()
-                    .map(|image| {
-                        Arc::new(
-                            Framebuffer::start(self.render_pass.clone())
-                                .add(image.clone())
-                                .unwrap()
-                                .build()
-                                .unwrap(),
-                        ) as _
-                    })
-                    .collect::<Vec<_>>(),
-            );
-            self.framebuffers = new_framebuffers;
         }
 
         let (image_num, acquire_future) =
@@ -575,15 +554,21 @@ impl GraphicsContext {
                 Err(err) => panic!("{:?}", err),
             };
 
+        // We can just create a `Framebuffer` on the fly like that.
+        // This is just prep work for a canvas eventually.
+        let framebuffer = Arc::new(
+            Framebuffer::start(self.render_pass.clone())
+                .add(self.swapchain_images[image_num].clone())
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
+
         let mut command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(
             self.device.clone(),
             self.queue.family(),
         ).unwrap()
-            .begin_render_pass(
-                self.framebuffers.as_ref().unwrap()[image_num].clone(),
-                false,
-                vec![self.clear_color.into()],
-            )
+            .begin_render_pass(framebuffer, false, vec![self.clear_color.into()])
             .unwrap();
         for secondary_command_buffer in self.secondary_command_buffers.drain(..) {
             unsafe {
