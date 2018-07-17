@@ -1,8 +1,7 @@
 use rayon::prelude::*;
 use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer};
-use vulkano::command_buffer::pool::standard::StandardCommandPoolAlloc;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer, DynamicState};
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::{self, Format};
@@ -56,8 +55,7 @@ pub(crate) struct GraphicsContext {
     quad_index_buffer: Arc<ImmutableBuffer<[u16]>>,
     pub(crate) default_sampler: Arc<Sampler>,
 
-    secondary_command_buffers:
-        Vec<Arc<dyn CommandBuffer<PoolAlloc = StandardCommandPoolAlloc> + Send + Sync>>,
+    secondary_command_buffers: Vec<Arc<AutoCommandBuffer>>,
 }
 
 impl GraphicsContext {
