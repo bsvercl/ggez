@@ -5,7 +5,7 @@ use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, Dynam
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::device::{Device, DeviceExtensions, Queue};
 use vulkano::format::{self, Format};
-use vulkano::framebuffer::{Framebuffer, RenderPassAbstract, Subpass};
+use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{StorageImage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::pipeline::vertex::OneVertexOneInstanceDefinition;
@@ -32,6 +32,7 @@ pub(crate) struct GraphicsContext {
 
     swapchain: Arc<Swapchain<winit::Window>>,
     swapchain_images: Vec<Arc<SwapchainImage<winit::Window>>>,
+    framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     pub(crate) pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     previous_frame_end: Option<Box<dyn GpuFuture>>,
@@ -268,6 +269,7 @@ impl GraphicsContext {
         };
 
         let mut graphics_context = GraphicsContext {
+            framebuffers: None,
             secondary_command_buffers: vec![],
             projection: initial_projection,
             modelview_stack: vec![initial_transform],
@@ -539,7 +541,25 @@ impl GraphicsContext {
             self.swapchain = new_swapchain;
             self.swapchain_images = new_swapchain_images;
 
+            self.framebuffers = None;
             self.recreate_swapchain = false;
+        }
+
+        if self.framebuffers.is_none() {
+            self.framebuffers = Some(
+                self.swapchain_images
+                    .iter()
+                    .map(|image| {
+                        Arc::new(
+                            Framebuffer::start(self.render_pass.clone())
+                                .add(image.clone())
+                                .unwrap()
+                                .build()
+                                .unwrap(),
+                        ) as _
+                    })
+                    .collect::<Vec<_>>(),
+            );
         }
 
         let (image_num, acquire_future) =
@@ -552,21 +572,15 @@ impl GraphicsContext {
                 Err(err) => panic!("{:?}", err),
             };
 
-        // We can just create a `Framebuffer` on the fly like that.
-        // This is just prep work for a canvas eventually.
-        let framebuffer = Arc::new(
-            Framebuffer::start(self.render_pass.clone())
-                .add(self.swapchain_images[image_num].clone())
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
-
         let mut command_buffer = AutoCommandBufferBuilder::primary_one_time_submit(
             self.device.clone(),
             self.queue.family(),
         ).unwrap()
-            .begin_render_pass(framebuffer, false, vec![self.clear_color.into()])
+            .begin_render_pass(
+                self.framebuffers.as_ref().unwrap()[image_num].clone(),
+                false,
+                vec![self.clear_color.into()],
+            )
             .unwrap();
         for secondary_command_buffer in self.secondary_command_buffers.drain(..) {
             unsafe {
