@@ -11,39 +11,37 @@
 //! but trying to wrap it
 //! up more conveniently really ends up with the exact same interface.
 //!
+//! TODO: UPDATE DOCS!
+//!
 //! See the `eventloop` example for an implementation.
 
-use sdl2;
+use gilrs;
+use winit;
+use winit::dpi;
 
-/// A key code.
-pub use sdl2::keyboard::Keycode;
+pub use input::keyboard::{KeyCode, KeyMods};
+/// A mouse button.
+pub use winit::MouseButton;
 
-/// A struct that holds the state of modifier buttons such as ctrl or shift.
-pub use sdl2::keyboard::Mod;
-/// A mouse button press.
-pub use sdl2::mouse::MouseButton;
-/// A struct containing the mouse state at a given instant.
-pub use sdl2::mouse::MouseState;
+/// An analog axis of some device (controller, joystick...).
+pub use gilrs::Axis;
+/// A button of some device (controller, joystick...).
+pub use gilrs::Button;
 
-/// A controller axis.
-pub use sdl2::controller::Axis;
-/// A controller button.
-pub use sdl2::controller::Button;
+/// `winit` events; nested in a module for re-export neatness.
+pub mod winit_event {
+    pub use super::winit::{
+        DeviceEvent, ElementState, Event, KeyboardInput, ModifiersState, MouseScrollDelta,
+        TouchPhase, WindowEvent,
+    };
+}
 
-pub use sdl2::event::Event;
-/// The event iterator
-pub use sdl2::event::EventPollIterator;
-
-use sdl2::event;
-use sdl2::event::Event::*;
-use sdl2::keyboard;
-use sdl2::mouse;
+use self::winit_event::*;
+/// `winit` event loop.
+pub use winit::EventsLoop;
 
 use context::Context;
 use GameResult;
-
-pub use sdl2::keyboard::{CAPSMOD, LALTMOD, LCTRLMOD, LGUIMOD, LSHIFTMOD, MODEMOD, NOMOD, NUMMOD,
-                         RALTMOD, RCTRLMOD, RESERVEDMOD, RGUIMOD, RSHIFTMOD};
 
 /// A trait defining event callbacks; your primary interface with
 /// `ggez`'s event loop.  Have a type implement this trait and
@@ -51,26 +49,26 @@ pub use sdl2::keyboard::{CAPSMOD, LALTMOD, LCTRLMOD, LGUIMOD, LSHIFTMOD, MODEMOD
 /// `event::run()` to run the game's mainloop.
 ///
 /// The default event handlers do nothing, apart from
-/// `key_down_event()`, which will by default exit the game if escape
-/// is pressed.  Just override the methods you want to do things with.
+/// `key_down_event()`, which will by default exit the game if the escape
+/// key is pressed.  Just override the methods you want to do things with.
 pub trait EventHandler {
-    /// Called upon each physics update to the game.
+    /// Called upon each logic update to the game.
     /// This should be where the game's logic takes place.
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()>;
+    fn update(&mut self, _ctx: &mut Context) -> GameResult;
 
     /// Called to do the drawing of your game.
     /// You probably want to start this with
     /// `graphics::clear()` and end it with
     /// `graphics::present()` and `timer::yield_now()`
-    fn draw(&mut self, _ctx: &mut Context) -> GameResult<()>;
+    fn draw(&mut self, _ctx: &mut Context) -> GameResult;
 
     /// A mouse button was pressed
     fn mouse_button_down_event(
         &mut self,
         _ctx: &mut Context,
-        _button: mouse::MouseButton,
-        _x: i32,
-        _y: i32,
+        _button: MouseButton,
+        _x: f32,
+        _y: f32,
     ) {
     }
 
@@ -78,74 +76,48 @@ pub trait EventHandler {
     fn mouse_button_up_event(
         &mut self,
         _ctx: &mut Context,
-        _button: mouse::MouseButton,
-        _x: i32,
-        _y: i32,
+        _button: MouseButton,
+        _x: f32,
+        _y: f32,
     ) {
     }
 
     /// The mouse was moved; it provides both absolute x and y coordinates in the window,
     /// and relative x and y coordinates compared to its last position.
-    fn mouse_motion_event(
-        &mut self,
-        _ctx: &mut Context,
-        _state: mouse::MouseState,
-        _x: i32,
-        _y: i32,
-        _xrel: i32,
-        _yrel: i32,
-    ) {
-    }
+    fn mouse_motion_event(&mut self, _ctx: &mut Context, _x: f32, _y: f32, _dx: f32, _dy: f32) {}
 
     /// The mousewheel was scrolled, vertically (y, positive away from and negative toward the user)
     /// or horizontally (x, positive to the right and negative to the left).
-    fn mouse_wheel_event(&mut self, _ctx: &mut Context, _x: i32, _y: i32) {}
+    fn mouse_wheel_event(&mut self, _ctx: &mut Context, _x: f32, _y: f32) {}
 
     /// A keyboard button was pressed.
-    fn key_down_event(&mut self, ctx: &mut Context, keycode: Keycode, _keymod: Mod, _repeat: bool) {
-        if keycode == keyboard::Keycode::Escape {
-            ctx.quit().expect("Should never fail");
+    fn key_down_event(
+        &mut self,
+        ctx: &mut Context,
+        keycode: KeyCode,
+        _keymods: KeyMods,
+        _repeat: bool,
+    ) {
+        if keycode == KeyCode::Escape {
+            ctx.quit();
         }
     }
 
     /// A keyboard button was released.
-    fn key_up_event(&mut self, _ctx: &mut Context, _keycode: Keycode, _keymod: Mod, _repeat: bool) {
-    }
+    fn key_up_event(&mut self, _ctx: &mut Context, _keycode: KeyCode, _keymods: KeyMods) {}
 
-    /// Candidate text is passed by the OS (via Input Method Editor).
-    /// Refer to:
-    /// <https://wiki.libsdl.org/SDL_TextEditingEvent>
-    /// <https://wiki.libsdl.org/SDL_TextInputEvent>
-    /// <https://wiki.libsdl.org/Tutorials/TextInput>
-    fn text_editing_event(&mut self, _ctx: &mut Context, _text: String, _start: i32, _length: i32) {
-    }
+    /// A unicode character was received, usually from keyboard input.
+    /// This is the intended way of facilitating text input.
+    fn text_input_event(&mut self, _ctx: &mut Context, _character: char) {}
 
-    /// Resulting text (usually a unicode character) is passed by the OS (via Input Method Editor).
-    /// Refer to:
-    /// <https://wiki.libsdl.org/SDL_TextEditingEvent>
-    /// <https://wiki.libsdl.org/SDL_TextInputEvent>
-    /// <https://wiki.libsdl.org/Tutorials/TextInput>
-    fn text_input_event(&mut self, _ctx: &mut Context, _text: String) {}
+    /// A controller button was pressed; id identifies which controller.
+    fn controller_button_down_event(&mut self, _ctx: &mut Context, _btn: Button, _id: usize) {}
 
-    /// A controller button was pressed; instance_id identifies which controller.
-    fn controller_button_down_event(
-        &mut self,
-        _ctx: &mut Context,
-        _btn: Button,
-        _instance_id: i32,
-    ) {
-    }
     /// A controller button was released.
-    fn controller_button_up_event(&mut self, _ctx: &mut Context, _btn: Button, _instance_id: i32) {}
+    fn controller_button_up_event(&mut self, _ctx: &mut Context, _btn: Button, _id: usize) {}
+
     /// A controller axis moved.
-    fn controller_axis_event(
-        &mut self,
-        _ctx: &mut Context,
-        _axis: Axis,
-        _value: i16,
-        _instance_id: i32,
-    ) {
-    }
+    fn controller_axis_event(&mut self, _ctx: &mut Context, _axis: Axis, _value: f32, _id: usize) {}
 
     /// Called when the window is shown or hidden.
     fn focus_event(&mut self, _ctx: &mut Context, _gained: bool) {}
@@ -157,33 +129,9 @@ pub trait EventHandler {
         false
     }
 
-    /// Called when the user resizes the window.
-    /// Is not called when you resize it yourself with
-    /// `graphics::set_mode()` though.
-    fn resize_event(&mut self, _ctx: &mut Context, _width: u32, _height: u32) {}
-}
-
-/// A handle to access the OS's event pump.
-pub struct Events(sdl2::EventPump);
-
-use std::fmt;
-impl fmt::Debug for Events {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Events: {:p}>", self)
-    }
-}
-
-impl Events {
-    /// Create a new Events object.
-    pub fn new(ctx: &Context) -> GameResult<Events> {
-        let e = ctx.sdl_context.event_pump()?;
-        Ok(Events(e))
-    }
-
-    /// Get an iterator for all events.
-    pub fn poll(&mut self) -> EventPollIterator {
-        self.0.poll_iter()
-    }
+    /// Called when the user resizes the window, or when it is resized
+    /// via `graphics::set_mode()`.
+    fn resize_event(&mut self, _ctx: &mut Context, _width: f32, _height: f32) {}
 }
 
 /// Runs the game's main loop, calling event callbacks on the given state
@@ -191,89 +139,107 @@ impl Events {
 ///
 /// It does not try to do any type of framerate limiting.  See the
 /// documentation for the `timer` module for more info.
-pub fn run<S>(ctx: &mut Context, state: &mut S) -> GameResult<()>
+pub fn run<S>(ctx: &mut Context, events_loop: &mut EventsLoop, state: &mut S) -> GameResult
 where
     S: EventHandler,
 {
-    let mut event_pump = ctx.sdl_context.event_pump()?;
+    use input::{keyboard, mouse};
 
-    let mut continuing = true;
-    while continuing {
+    while ctx.continuing {
         ctx.timer_context.tick();
-
-        for event in event_pump.poll_iter() {
-            ctx.process_event(&event);
+        events_loop.poll_events(|event| {
+            let event = ctx.process_event(&event);
             match event {
-                Quit { .. } => {
-                    continuing = state.quit_event(ctx);
-                    // println!("Quit event: {:?}", t);
-                }
-                KeyDown {
-                    keycode,
-                    keymod,
-                    repeat,
-                    ..
-                } => {
-                    if let Some(key) = keycode {
-                        state.key_down_event(ctx, key, keymod, repeat)
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(dpi::LogicalSize { width, height }) => {
+                        state.resize_event(ctx, width as f32, height as f32);
                     }
-                }
-                KeyUp {
-                    keycode,
-                    keymod,
-                    repeat,
-                    ..
-                } => {
-                    if let Some(key) = keycode {
-                        state.key_up_event(ctx, key, keymod, repeat)
+                    WindowEvent::CloseRequested => {
+                        if !state.quit_event(ctx) {
+                            ctx.quit();
+                        }
                     }
+                    WindowEvent::Focused(gained) => {
+                        state.focus_event(ctx, gained);
+                    }
+                    WindowEvent::ReceivedCharacter(ch) => {
+                        state.text_input_event(ctx, ch);
+                    }
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(keycode),
+                                modifiers,
+                                ..
+                            },
+                        ..
+                    } => {
+                        let repeat = keyboard::is_key_repeated(ctx);
+                        state.key_down_event(ctx, keycode, modifiers.into(), repeat);
+                    }
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Released,
+                                virtual_keycode: Some(keycode),
+                                modifiers,
+                                ..
+                            },
+                        ..
+                    } => {
+                        state.key_up_event(ctx, keycode, modifiers.into());
+                    }
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        let (x, y) = match delta {
+                            MouseScrollDelta::LineDelta(x, y) => (x, y),
+                            MouseScrollDelta::PixelDelta(dpi::LogicalPosition { x, y }) => {
+                                (x as f32, y as f32)
+                            }
+                        };
+                        state.mouse_wheel_event(ctx, x, y);
+                    }
+                    WindowEvent::MouseInput {
+                        state: element_state,
+                        button,
+                        ..
+                    } => {
+                        let position = mouse::get_position(ctx);
+                        match element_state {
+                            ElementState::Pressed => {
+                                state.mouse_button_down_event(ctx, button, position.x, position.y)
+                            }
+                            ElementState::Released => {
+                                state.mouse_button_up_event(ctx, button, position.x, position.y)
+                            }
+                        }
+                    }
+                    WindowEvent::CursorMoved { .. } => {
+                        let position = mouse::get_position(ctx);
+                        let delta = mouse::get_delta(ctx);
+                        state.mouse_motion_event(ctx, position.x, position.y, delta.x, delta.y);
+                    }
+                    x => {
+                        trace!("ignoring window event {:?}", x);
+                    }
+                },
+                Event::DeviceEvent { event, .. } => match event {
+                    _ => (),
+                },
+                Event::Awakened => (),
+                Event::Suspended(_) => (),
+            }
+        });
+        while let Some(gilrs::Event { id, event, .. }) = ctx.gamepad_context.gilrs.next_event() {
+            match event {
+                gilrs::EventType::ButtonPressed(button, _) => {
+                    state.controller_button_down_event(ctx, button, id);
                 }
-                TextEditing {
-                    text,
-                    start,
-                    length,
-                    ..
-                } => state.text_editing_event(ctx, text, start, length),
-                TextInput { text, .. } => state.text_input_event(ctx, text),
-                MouseButtonDown {
-                    mouse_btn, x, y, ..
-                } => state.mouse_button_down_event(ctx, mouse_btn, x, y),
-                MouseButtonUp {
-                    mouse_btn, x, y, ..
-                } => state.mouse_button_up_event(ctx, mouse_btn, x, y),
-                MouseMotion {
-                    mousestate,
-                    x,
-                    y,
-                    xrel,
-                    yrel,
-                    ..
-                } => {
-                    state.mouse_motion_event(ctx, mousestate, x, y, xrel, yrel);
+                gilrs::EventType::ButtonReleased(button, _) => {
+                    state.controller_button_up_event(ctx, button, id);
                 }
-                MouseWheel { x, y, .. } => state.mouse_wheel_event(ctx, x, y),
-                ControllerButtonDown { button, which, .. } => {
-                    state.controller_button_down_event(ctx, button, which)
-                }
-                ControllerButtonUp { button, which, .. } => {
-                    state.controller_button_up_event(ctx, button, which)
-                }
-                ControllerAxisMotion {
-                    axis, value, which, ..
-                } => state.controller_axis_event(ctx, axis, value, which),
-                Window {
-                    win_event: event::WindowEvent::FocusGained,
-                    ..
-                } => state.focus_event(ctx, true),
-                Window {
-                    win_event: event::WindowEvent::FocusLost,
-                    ..
-                } => state.focus_event(ctx, false),
-                Window {
-                    win_event: event::WindowEvent::Resized(w, h),
-                    ..
-                } => {
-                    state.resize_event(ctx, w as u32, h as u32);
+                gilrs::EventType::AxisChanged(axis, value, _) => {
+                    state.controller_axis_event(ctx, axis, value, id);
                 }
                 _ => {}
             }

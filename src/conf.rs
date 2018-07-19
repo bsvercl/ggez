@@ -1,8 +1,8 @@
 //! The `conf` module contains functions for loading and saving game
 //! configurations.
 //!
-//! A `Conf` struct is used to specify hardware setup stuff used to create
-//! the window and other context information.
+//! A `Conf` struct is used to create a config file which specifies
+//! hardware setup stuff, mostly video display settings.
 //!
 //! By default a ggez game will search its resource paths for a `/conf.toml`
 //! file and load values from it when the `Context` is created.  This file
@@ -19,33 +19,12 @@ use GameResult;
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FullscreenType {
     /// Windowed mode
-    Off,
+    Windowed,
     /// Real fullscreen
     True,
     /// Windowed fullscreen, generally preferred over real fullscreen
     /// these days 'cause it plays nicer with multiple monitors.
     Desktop,
-}
-
-use sdl2::video::FullscreenType as SdlFullscreenType;
-impl From<SdlFullscreenType> for FullscreenType {
-    fn from(other: SdlFullscreenType) -> Self {
-        match other {
-            SdlFullscreenType::Off => FullscreenType::Off,
-            SdlFullscreenType::True => FullscreenType::True,
-            SdlFullscreenType::Desktop => FullscreenType::Desktop,
-        }
-    }
-}
-
-impl From<FullscreenType> for SdlFullscreenType {
-    fn from(other: FullscreenType) -> Self {
-        match other {
-            FullscreenType::Off => SdlFullscreenType::Off,
-            FullscreenType::True => SdlFullscreenType::True,
-            FullscreenType::Desktop => SdlFullscreenType::Desktop,
-        }
-    }
 }
 
 /// A builder structure containing window settings
@@ -58,7 +37,7 @@ impl From<FullscreenType> for SdlFullscreenType {
 ///     width: 800,
 ///     height: 600,
 ///     borderless: false,
-///     fullscreen_type: FullscreenType::Off,
+///     fullscreen_type: FullscreenType::Windowed,
 ///     vsync: true,
 ///     min_width: 0,
 ///     max_width: 0,
@@ -66,41 +45,62 @@ impl From<FullscreenType> for SdlFullscreenType {
 ///     max_height: 0,
 /// }
 /// ```
-#[derive(Debug, Copy, Clone, SmartDefault, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, SmartDefault, Serialize, Deserialize, PartialEq)]
 pub struct WindowMode {
     /// Window width
-    #[default = r#"800"#]
-    pub width: u32,
+    #[default = r#"800.0"#]
+    pub width: f32,
     /// Window height
-    #[default = r#"600"#]
-    pub height: u32,
+    #[default = r#"600.0"#]
+    pub height: f32,
+    /// Whether or not to maximize the window
+    #[default = r#"false"#]
+    pub maximized: bool,
+    /// Fullscreen type
+    #[default = r#"FullscreenType::Windowed"#]
+    pub fullscreen_type: FullscreenType,
     /// Whether or not to show window decorations
     #[default = r#"false"#]
     pub borderless: bool,
-    /// Fullscreen type
-    #[default = r#"FullscreenType::Off"#]
-    pub fullscreen_type: FullscreenType,
-    /// Whether or not to enable vsync
-    #[default = r#"true"#]
-    pub vsync: bool,
     /// Minimum width for resizable windows; 0 means no limit
-    #[default = r#"0"#]
-    pub min_width: u32,
+    #[default = r#"0.0"#]
+    pub min_width: f32,
     /// Minimum height for resizable windows; 0 means no limit
-    #[default = r#"0"#]
-    pub min_height: u32,
+    #[default = r#"0.0"#]
+    pub min_height: f32,
     /// Maximum width for resizable windows; 0 means no limit
-    #[default = r#"0"#]
-    pub max_width: u32,
+    #[default = r#"0.0"#]
+    pub max_width: f32,
     /// Maximum height for resizable windows; 0 means no limit
-    #[default = r#"0"#]
-    pub max_height: u32,
+    #[default = r#"0.0"#]
+    pub max_height: f32,
+    /// Whether or not to scale all "pixel" coordinates to deal with
+    /// high DPI screens.
+    ///
+    /// A very good overview of this is available in
+    /// [the `winit` docs](https://docs.rs/winit/0.16.1/winit/dpi/index.html).
+    /// If this is false (the default), one pixel in ggez equates to one
+    /// physical pixel on the screen.  If it is `true`, then ggez will
+    /// scale *all* pixel coordinates by the scaling factor returned by
+    /// `graphics::get_hidpi_factor()`.
+    #[default = r"false"]
+    pub hidpi: bool,
+    /// Whether or not the window is resizable
+    #[default = r#"false"#]
+    pub resizable: bool,
 }
 
 impl WindowMode {
-    /// Set borderless
-    pub fn borderless(mut self, borderless: bool) -> Self {
-        self.borderless = borderless;
+    /// Set default window size, or screen resolution in true fullscreen mode
+    pub fn dimensions(mut self, width: f32, height: f32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
+    }
+
+    /// Set whether the window should be maximized
+    pub fn maximized(mut self, maximized: bool) -> Self {
+        self.maximized = maximized;
         self
     }
 
@@ -110,30 +110,35 @@ impl WindowMode {
         self
     }
 
-    /// Set vsync
-    pub fn vsync(mut self, vsync: bool) -> Self {
-        self.vsync = vsync;
-        self
-    }
-
-    /// Set default window size, or screen resolution in fullscreen mode
-    pub fn dimensions(mut self, width: u32, height: u32) -> Self {
-        self.width = width;
-        self.height = height;
+    /// Set borderless
+    pub fn borderless(mut self, borderless: bool) -> Self {
+        self.borderless = borderless;
         self
     }
 
     /// Set minimum window dimensions for windowed mode
-    pub fn min_dimensions(mut self, width: u32, height: u32) -> Self {
+    pub fn min_dimensions(mut self, width: f32, height: f32) -> Self {
         self.min_width = width;
         self.min_height = height;
         self
     }
 
     /// Set maximum window dimensions for windowed mode
-    pub fn max_dimensions(mut self, width: u32, height: u32) -> Self {
+    pub fn max_dimensions(mut self, width: f32, height: f32) -> Self {
         self.max_width = width;
         self.max_height = height;
+        self
+    }
+
+    /// Set resizable
+    pub fn resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
+        self
+    }
+
+    /// Sets whether or not to allow hidpi.
+    pub fn hidpi(mut self, hidpi: bool) -> Self {
+        self.hidpi = hidpi;
         self
     }
 }
@@ -142,6 +147,8 @@ impl WindowMode {
 /// that must be set at init time and cannot be changed afterwards.
 ///
 /// Defaults:
+///
+/// TODO: Update docs and defaults
 ///
 /// ```rust,ignore
 /// WindowSetup {
@@ -152,25 +159,29 @@ impl WindowMode {
 ///     samples: NumSamples::One,
 /// }
 /// ```
-#[derive(Debug, Clone, SmartDefault, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, SmartDefault, Serialize, Deserialize, PartialEq)]
 pub struct WindowSetup {
     /// The window title.
     #[default = r#""An easy, good game".to_owned()"#]
     pub title: String,
+    /// Number of samples for multisample anti-aliasing
+    #[default = r#"NumSamples::One"#]
+    pub samples: NumSamples,
+    /// Whether or not to enable vsync
+    #[default = r#"true"#]
+    pub vsync: bool,
+    /// Whether or not should the window's background be transparent
+    #[default = r#"false"#]
+    pub transparent: bool,
     /// A file path to the window's icon.
     /// It is rooted in the `resources` directory (see the `filesystem` module for details),
     /// and an empty string results in a blank/default icon.
     #[default = r#""".to_owned()"#]
     pub icon: String,
-    /// Whether or not the window is resizable
-    #[default = r#"false"#]
-    pub resizable: bool,
-    /// Whether or not to allow high DPI mode when creating the window
+    /// Whether or not to enable sRGB (gamma corrected color)
+    /// handling on the display.
     #[default = r#"true"#]
-    pub allow_highdpi: bool,
-    /// Number of samples for multisample anti-aliasing
-    #[default = r#"NumSamples::One"#]
-    pub samples: NumSamples,
+    pub srgb: bool,
 }
 
 impl WindowSetup {
@@ -180,36 +191,39 @@ impl WindowSetup {
         self
     }
 
+    /// Set number of samples
+    ///
+    /// Returns None if given an invalid value
+    /// (valid values are powers of 2 from 1 to 16)
+    pub fn samples(mut self, samples: NumSamples) -> Self {
+        self.samples = samples;
+        self
+    }
+
+    /// Set if vsync is enabled.
+    pub fn vsync(mut self, vsync: bool) -> Self {
+        self.vsync = vsync;
+        self
+    }
+
+    /// Set if window background should be transparent.
+    ///
+    /// TODO: Is this necessary?  Do we ever want this?
+    pub fn transparent(mut self, transparent: bool) -> Self {
+        self.transparent = transparent;
+        self
+    }
+
     /// Set the window's icon.
     pub fn icon(mut self, icon: &str) -> Self {
         self.icon = icon.to_owned();
         self
     }
 
-    /// Set resizable
-    pub fn resizable(mut self, resizable: bool) -> Self {
-        self.resizable = resizable;
+    /// Set sRGB color mode.
+    pub fn srgb(mut self, active: bool) -> Self {
+        self.srgb = active;
         self
-    }
-
-    /// Set allow_highdpi
-    pub fn allow_highdpi(mut self, allow: bool) -> Self {
-        self.allow_highdpi = allow;
-        self
-    }
-
-    /// Set number of samples
-    ///
-    /// Returns None if given an invalid value
-    /// (valid values are powers of 2 from 1 to 16)
-    pub fn samples(mut self, samples: u32) -> Option<Self> {
-        match NumSamples::from_u32(samples) {
-            Some(s) => {
-                self.samples = s;
-                Some(self)
-            }
-            None => None,
-        }
     }
 }
 
@@ -230,6 +244,18 @@ pub enum Backend {
         #[default = r#"2"#]
         minor: u8,
     },
+}
+
+impl Backend {
+    /// Set OpenGL backend and version.
+    pub fn opengl(self, new_major: u8, new_minor: u8) -> Self {
+        match self {
+            Backend::OpenGL { .. } => Backend::OpenGL {
+                major: new_major,
+                minor: new_minor,
+            },
+        }
+    }
 }
 
 /// The possible number of samples for multisample anti-aliasing
@@ -271,7 +297,7 @@ impl NumSamples {
 /// Conf {
 ///     window_mode: WindowMode::default(),
 ///     window_setup: WindowSetup::default(),
-///     backend: Backend::OpenGL(3, 2),
+///     backend: Backend::OpenGL{ major: 3, minor: 2, srgb: true},
 /// }
 /// ```
 #[derive(Serialize, Deserialize, Debug, PartialEq, SmartDefault)]
@@ -294,14 +320,14 @@ impl Conf {
     /// a `Conf` from it.
     pub fn from_toml_file<R: io::Read>(file: &mut R) -> GameResult<Conf> {
         let mut s = String::new();
-        file.read_to_string(&mut s)?;
+        let _ = file.read_to_string(&mut s)?;
         let decoded = toml::from_str(&s)?;
         Ok(decoded)
     }
 
     /// Saves the `Conf` to the given `Write` object,
     /// formatted as TOML.
-    pub fn to_toml_file<W: io::Write>(&self, file: &mut W) -> GameResult<()> {
+    pub fn to_toml_file<W: io::Write>(&self, file: &mut W) -> GameResult {
         let s = toml::to_vec(self)?;
         file.write_all(&s)?;
         Ok(())
@@ -315,7 +341,7 @@ mod tests {
     /// Tries to encode and decode a `Conf` object
     /// and makes sure it gets the same result it had.
     #[test]
-    fn encode_round_trip() {
+    fn headless_encode_round_trip() {
         let c1 = conf::Conf::new();
         let mut writer = Vec::new();
         let _c = c1.to_toml_file(&mut writer).unwrap();

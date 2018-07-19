@@ -13,20 +13,17 @@
 //! `Context::load_from_conf()`; some platforms such as Windows also
 //! incorporate the `author` string into the path.
 //!
-//! Files will be searched for in these locations in order, and the first one
+//! These locations will be searched in order for files, and the first file
 //! found used.  That allows game assets to be easily distributed as an archive
 //! file, but locally overridden for testing or modding simply by putting
-//! altered copies of them in the game's `resources/` directory.
+//! altered copies of them in the game's `resources/` directory.  It
+//! is loosely based off of the `PhysicsFS` library.
 //!
 //! See the source of the `files` example for more details.
 //!
 //! Note that the file lookups WILL follow symlinks!  It is
 //! more for convenience than absolute security, so don't treat it as
 //! being secure.
-//!
-//! If you build `ggez` with the `cargo-resource-root` feature flag, it will
-//! also look for a `resources/` subdirectory in the same directory as your
-//! `Cargo.toml`, which can be very convenient for development.
 
 use std::env;
 use std::fmt;
@@ -37,8 +34,7 @@ use app_dirs2::*;
 
 use conf;
 use vfs::{self, VFS};
-use GameError;
-use GameResult;
+use {Context, GameError, GameResult};
 
 pub use vfs::OpenOptions;
 
@@ -58,7 +54,7 @@ pub struct Filesystem {
 /// or whatever.
 pub enum File {
     /// A wrapper for a VFile trait object.
-    VfsFile(Box<vfs::VFile>),
+    VfsFile(Box<dyn vfs::VFile>),
 }
 
 impl fmt::Debug for File {
@@ -105,7 +101,7 @@ impl Filesystem {
 
         // Ditch the filename (if any)
         if root_path.file_name().is_some() {
-            root_path.pop();
+            let _ = root_path.pop();
         }
 
         // Set up VFS to merge resource path, root path, and zip path.
@@ -155,18 +151,6 @@ impl Filesystem {
             overlay.push_back(Box::new(physfs));
         }
 
-        // Cargo manifest dir!
-        #[cfg(feature = "cargo-resource-root")]
-        {
-            if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-                let mut path = path::PathBuf::from(manifest_dir);
-                path.push("resources");
-                trace!("Cargo manifest resource path: {:?}", user_data_path);
-                let physfs = vfs::PhysicalFS::new(&path, true);
-                overlay.push_back(Box::new(physfs));
-            }
-        }
-
         let fs = Filesystem {
             vfs: overlay,
             resources_path,
@@ -180,14 +164,14 @@ impl Filesystem {
 
     /// Opens the given path and returns the resulting `File`
     /// in read-only mode.
-    pub fn open<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<File> {
+    pub(crate) fn open<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<File> {
         self.vfs.open(path.as_ref()).map(|f| File::VfsFile(f))
     }
 
     /// Opens a file in the user directory with the given `filesystem::OpenOptions`.
     /// Note that even if you open a file read-only, it can only access
     /// files in the user directory.
-    pub fn open_options<P: AsRef<path::Path>>(
+    pub(crate) fn open_options<P: AsRef<path::Path>>(
         &mut self,
         path: P,
         options: &OpenOptions,
@@ -206,35 +190,35 @@ impl Filesystem {
 
     /// Creates a new file in the user directory and opens it
     /// to be written to, truncating it if it already exists.
-    pub fn create<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<File> {
+    pub(crate) fn create<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<File> {
         self.vfs.create(path.as_ref()).map(|f| File::VfsFile(f))
     }
 
     /// Create an empty directory in the user dir
     /// with the given name.  Any parents to that directory
     /// that do not exist will be created.
-    pub fn create_dir<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
+    pub(crate) fn create_dir<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
         self.vfs.mkdir(path.as_ref())
     }
 
     /// Deletes the specified file in the user dir.
-    pub fn delete<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
+    pub(crate) fn delete<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
         self.vfs.rm(path.as_ref())
     }
 
     /// Deletes the specified directory in the user dir,
     /// and all its contents!
-    pub fn delete_dir<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
+    pub(crate) fn delete_dir<P: AsRef<path::Path>>(&mut self, path: P) -> GameResult<()> {
         self.vfs.rmrf(path.as_ref())
     }
 
     /// Check whether a file or directory exists.
-    pub fn exists<P: AsRef<path::Path>>(&self, path: P) -> bool {
+    pub(crate) fn exists<P: AsRef<path::Path>>(&self, path: P) -> bool {
         self.vfs.exists(path.as_ref())
     }
 
     /// Check whether a path points at a file.
-    pub fn is_file<P: AsRef<path::Path>>(&self, path: P) -> bool {
+    pub(crate) fn is_file<P: AsRef<path::Path>>(&self, path: P) -> bool {
         self.vfs
             .metadata(path.as_ref())
             .map(|m| m.is_file())
@@ -242,46 +226,30 @@ impl Filesystem {
     }
 
     /// Check whether a path points at a directory.
-    pub fn is_dir<P: AsRef<path::Path>>(&self, path: P) -> bool {
+    pub(crate) fn is_dir<P: AsRef<path::Path>>(&self, path: P) -> bool {
         self.vfs
             .metadata(path.as_ref())
             .map(|m| m.is_dir())
             .unwrap_or(false)
     }
 
-    /// Return the full path to the user data directory
-    pub fn get_user_data_dir(&self) -> &path::Path {
-        &self.user_data_path
-    }
-
-    /// Return the full path to the user config directory
-    pub fn get_user_config_dir(&self) -> &path::Path {
-        &self.user_config_path
-    }
-
-    /// Returns the full path to the resource directory
-    /// (even if it doesn't exist)
-    pub fn get_resources_dir(&self) -> &path::Path {
-        &self.resources_path
-    }
-
     /// Returns a list of all files and directories in the resource directory,
     /// in no particular order.
     ///
     /// Lists the base directory if an empty path is given.
-    pub fn read_dir<P: AsRef<path::Path>>(
+    pub(crate) fn read_dir<P: AsRef<path::Path>>(
         &mut self,
         path: P,
-    ) -> GameResult<Box<Iterator<Item = path::PathBuf>>> {
+    ) -> GameResult<Box<dyn Iterator<Item = path::PathBuf>>> {
         let itr = self.vfs.read_dir(path.as_ref())?.map(|fname| {
             fname.expect("Could not read file in read_dir()?  Should never happen, I hope!")
         });
         Ok(Box::new(itr))
     }
 
-    /// Prints the contents of all data directories.
-    /// Useful for debugging.
-    pub fn print_all(&mut self) {
+    /// Prints the contents of all data directories
+    /// to standard output.  Useful for debugging.
+    pub(crate) fn print_all(&mut self) {
         for vfs in self.vfs.roots() {
             println!("Source {:?}", vfs);
             match vfs.read_dir(path::Path::new("/")) {
@@ -293,13 +261,15 @@ impl Filesystem {
         }
     }
 
+    // TODO: The code duplication here irks me.
+    // print_all() and log_all() should be combinable.
     /// Outputs the contents of all data directories,
     /// using the "info" log level of the `log` crate.
     /// Useful for debugging.
     ///
-    /// See the `logging` example for how to collect
+    /// See the `logging` example for info on how to collect
     /// log information.
-    pub fn log_all(&mut self) {
+    pub(crate) fn log_all(&mut self) {
         for vfs in self.vfs.roots() {
             info!("Source {:?}", vfs);
             match vfs.read_dir(path::Path::new("/")) {
@@ -318,7 +288,7 @@ impl Filesystem {
     /// harder than it looks to make it bulletproof across platforms.
     /// But it can be very nice for debugging and dev purposes, such as
     /// by pushing `$CARGO_MANIFEST_DIR/resources` to it
-    pub fn mount(&mut self, path: &path::Path, readonly: bool) {
+    pub(crate) fn mount(&mut self, path: &path::Path, readonly: bool) {
         let physfs = vfs::PhysicalFS::new(path, readonly);
         trace!("Mounting new path: {:?}", physfs);
         self.vfs.push_back(Box::new(physfs));
@@ -327,7 +297,7 @@ impl Filesystem {
     /// Looks for a file named "/conf.toml" in any resource directory and
     /// loads it if it finds it.
     /// If it can't read it for some reason, returns an error.
-    pub fn read_config(&mut self) -> GameResult<conf::Conf> {
+    pub(crate) fn read_config(&mut self) -> GameResult<conf::Conf> {
         let conf_path = path::Path::new(CONFIG_NAME);
         if self.is_file(conf_path) {
             let mut file = self.open(conf_path)?;
@@ -342,7 +312,7 @@ impl Filesystem {
 
     /// Takes a `conf::Conf` object and saves it to the user directory,
     /// overwriting any file already there.
-    pub fn write_config(&mut self, conf: &conf::Conf) -> GameResult<()> {
+    pub(crate) fn write_config(&mut self, conf: &conf::Conf) -> GameResult<()> {
         let conf_path = path::Path::new(CONFIG_NAME);
         let mut file = self.create(conf_path)?;
         conf.to_toml_file(&mut file)?;
@@ -355,6 +325,129 @@ impl Filesystem {
             )))
         }
     }
+}
+
+/// Opens the given path and returns the resulting `File`
+/// in read-only mode.
+pub fn open<P: AsRef<path::Path>>(ctx: &mut Context, path: P) -> GameResult<File> {
+    ctx.filesystem.open(path)
+}
+
+/// Opens a file in the user directory with the given `filesystem::OpenOptions`.
+/// Note that even if you open a file read-only, it can only access
+/// files in the user directory.
+pub fn open_options<P: AsRef<path::Path>>(
+    ctx: &mut Context,
+    path: P,
+    options: &OpenOptions,
+) -> GameResult<File> {
+    ctx.filesystem.open_options(path, options)
+}
+
+/// Creates a new file in the user directory and opens it
+/// to be written to, truncating it if it already exists.
+pub fn create<P: AsRef<path::Path>>(ctx: &mut Context, path: P) -> GameResult<File> {
+    ctx.filesystem.create(path)
+}
+
+/// Create an empty directory in the user dir
+/// with the given name.  Any parents to that directory
+/// that do not exist will be created.
+pub fn create_dir<P: AsRef<path::Path>>(ctx: &mut Context, path: P) -> GameResult {
+    ctx.filesystem.create_dir(path.as_ref())
+}
+
+/// Deletes the specified file in the user dir.
+pub fn delete<P: AsRef<path::Path>>(ctx: &mut Context, path: P) -> GameResult {
+    ctx.filesystem.delete(path.as_ref())
+}
+
+/// Deletes the specified directory in the user dir,
+/// and all its contents!
+pub fn delete_dir<P: AsRef<path::Path>>(ctx: &mut Context, path: P) -> GameResult {
+    ctx.filesystem.delete_dir(path.as_ref())
+}
+
+/// Check whether a file or directory exists.
+pub fn exists<P: AsRef<path::Path>>(ctx: &Context, path: P) -> bool {
+    ctx.filesystem.exists(path.as_ref())
+}
+
+/// Check whether a path points at a file.
+pub fn is_file<P: AsRef<path::Path>>(ctx: &Context, path: P) -> bool {
+    ctx.filesystem.is_file(path)
+}
+
+/// Check whether a path points at a directory.
+pub fn is_dir<P: AsRef<path::Path>>(ctx: &Context, path: P) -> bool {
+    ctx.filesystem.is_dir(path)
+}
+
+/// Return the full path to the user data directory
+pub fn get_user_data_dir(ctx: &Context) -> &path::Path {
+    &ctx.filesystem.user_data_path
+}
+
+/// Return the full path to the user config directory
+pub fn get_user_config_dir(ctx: &Context) -> &path::Path {
+    &ctx.filesystem.user_config_path
+}
+
+/// Returns the full path to the resource directory
+/// (even if it doesn't exist)
+pub fn get_resources_dir(ctx: &Context) -> &path::Path {
+    &ctx.filesystem.resources_path
+}
+
+/// Returns a list of all files and directories in the resource directory,
+/// in no particular order.
+///
+/// Lists the base directory if an empty path is given.
+pub fn read_dir<P: AsRef<path::Path>>(
+    ctx: &mut Context,
+    path: P,
+) -> GameResult<Box<dyn Iterator<Item = path::PathBuf>>> {
+    ctx.filesystem.read_dir(path)
+}
+
+/// Prints the contents of all data directories.
+/// Useful for debugging.
+pub fn print_all(ctx: &mut Context) {
+    ctx.filesystem.print_all()
+}
+
+/// Outputs the contents of all data directories,
+/// using the "info" log level of the `log` crate.
+/// Useful for debugging.
+///
+/// See the `logging` example for how to collect
+/// log information.
+pub fn log_all(ctx: &mut Context) {
+    ctx.filesystem.log_all()
+}
+
+/// Adds the given (absolute) path to the list of directories
+/// it will search to look for resources.
+///
+/// You probably shouldn't use this in the general case, since it is
+/// harder than it looks to make it bulletproof across platforms.
+/// But it can be very nice for debugging and dev purposes, such as
+/// by pushing `$CARGO_MANIFEST_DIR/resources` to it
+pub fn mount(ctx: &mut Context, path: &path::Path, readonly: bool) {
+    ctx.filesystem.mount(path, readonly)
+}
+
+/// Looks for a file named "/conf.toml" in any resource directory and
+/// loads it if it finds it.
+/// If it can't read it for some reason, returns an error.
+pub fn read_config(ctx: &mut Context) -> GameResult<conf::Conf> {
+    ctx.filesystem.read_config()
+}
+
+/// Takes a `conf::Conf` object and saves it to the user directory,
+/// overwriting any file already there.
+pub fn write_config(ctx: &mut Context, conf: &conf::Conf) -> GameResult {
+    ctx.filesystem.write_config(conf)
 }
 
 #[cfg(test)]
@@ -382,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_exists() {
+    fn headless_test_file_exists() {
         let f = get_dummy_fs_for_tests();
 
         let tile_file = path::Path::new("/tile.png");
@@ -396,7 +489,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_dir() {
+    fn headless_test_read_dir() {
         let mut f = get_dummy_fs_for_tests();
 
         let dir_contents_size = f.read_dir("/").unwrap().count();
@@ -404,19 +497,19 @@ mod tests {
     }
 
     #[test]
-    fn test_create_delete_file() {
+    fn headless_test_create_delete_file() {
         let mut fs = get_dummy_fs_for_tests();
         let test_file = path::Path::new("/testfile.txt");
         let bytes = "test".as_bytes();
 
         {
             let mut file = fs.create(test_file).unwrap();
-            file.write(bytes).unwrap();
+            let _ = file.write(bytes).unwrap();
         }
         {
             let mut buffer = Vec::new();
             let mut file = fs.open(test_file).unwrap();
-            file.read_to_end(&mut buffer).unwrap();
+            let _ = file.read_to_end(&mut buffer).unwrap();
             assert_eq!(bytes, buffer.as_slice());
         }
 
@@ -424,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn test_file_not_found() {
+    fn headless_test_file_not_found() {
         let mut fs = get_dummy_fs_for_tests();
         {
             let rel_file = "testfile.txt";
@@ -447,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn test_write_config() {
+    fn headless_test_write_config() {
         let mut f = get_dummy_fs_for_tests();
         let conf = conf::Conf::new();
         // The config file should end up in

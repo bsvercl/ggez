@@ -9,9 +9,9 @@
 
 ggez is a Rust library to create a Good Game Easily.
 
-More specifically, ggez is a lightweight cross-platform game framework 
-for making 2D games with minimum friction.  It aims to implement an 
-API based on (a Rustified version of) the [LÖVE](https://love2d.org/) 
+More specifically, ggez is a lightweight cross-platform game framework
+for making 2D games with minimum friction.  It aims to implement an
+API based on (a Rustified version of) the [LÖVE](https://love2d.org/)
 game framework.  This means it contains basic and portable 2D
 drawing, sound, resource loading and event handling.
 
@@ -51,40 +51,22 @@ Check out the [projects list!](docs/Projects.md)
 
 ## Usage
 
-ggez requires rustc >= 1.25.0 and distributed on
+ggez is requires rustc >= 1.27 and distributed on
 crates.io.  To include it in your project, just add the dependency
 line to your `Cargo.toml` file:
 
 ```text
-ggez = "0.4"
+ggez = "0.5"
 ```
-
-However you also need to have the SDL2 libraries installed on your
-system.  The best way to do this is documented [by the SDL2
-crate](https://github.com/AngryLawyer/rust-sdl2#user-content-requirements).
-
-ggez consists of three main parts: A `Context` object which
-contains all the state required to interface with the computer's
-hardware, an `EventHandler` trait that the user implements to
-register callbacks for events, and various sub-modules such as
-`graphics` and `audio` that provide the functionality to actually
-get stuff done.  The general pattern is to create a struct holding
-your game's data which implements the `EventHandler` trait.
-Create a new `Context` object with default objects from a `ContextBuilder`
-or `Conf` object, and then call `event::run()` with
-the `Context` and an instance of your `EventHandler` to run your game's
-main loop.
-
-## Examples
-
-See the `examples/` directory in the source.  Most examples show off
-a single feature of ggez, while `astroblasto` is a small  but
-complete Asteroids-like game.
+See the [API docs](https://docs.rs/ggez/) for full documentation, or the [examples](/examples) directory for a number of commented examples of varying complexity.  Most examples show off
+a single feature of ggez, while `astroblasto` and `snake` are a small but complete games.
 
 To run the examples, just check out the source and execute `cargo run --example`
 in the root directory:
 
 ```text
+git clone https://github.com/ggez/ggez.git
+cd ggez
 cargo run --example astroblasto
 ```
 
@@ -95,14 +77,13 @@ to common problems.
 
 ## Implementation details
 
-ggez is built upon SDL2 for windowing and events, `rodio` for sound,
+ggez is built upon `winit` for windowing and events, `rodio` for sound,
 and a 2D drawing engine implemented in `gfx` using the OpenGL backend
 (which currently defaults to use OpenGL 3.2).  It *should* be
 entirely thread-safe outside of the basic event-handling loop, and
 portable to Windows, Linux and Mac.
 
-The goal is to eventually have ggez be pure Rust, but we're not there
-yet.
+ggez is Pure Rust(tm).
 
 ## Help!
 
@@ -112,4 +93,8 @@ Sources of information:
  * The [API docs](https://docs.rs/ggez/), a lot of design stuff is explained there.
  * Check out the [examples](https://github.com/ggez/ggez/tree/master/examples).
 
-If you still have problems, feel free to [open an issue](https://github.com/ggez/ggez/issues) or say hi in the `#rust-gamedev` IRC channel on the `irc.mozilla.org` server.
+ If you still have problems or questions, feel free to ask!  Easiest ways are:
+
+ * open an issue on [the Github issue tracker](https://github.com/ggez/ggez/issues)
+ * say hi in the `#rust-gamedev` IRC channel on the `irc.mozilla.org` server
+ * or in the [unofficial Rust Discord server](http://bit.ly/rust-community)

@@ -2,6 +2,7 @@
 //! with ggez for cool and spooky effects. See the `shader` and `shadows`
 //! examples for a taste.
 
+use gfx::format;
 use gfx::handle::*;
 use gfx::preset::blend;
 use gfx::pso::buffer::*;
@@ -141,7 +142,7 @@ where
         mode: BlendMode,
         pso: PipelineState<Spec::Resources, ConstMeta<C>>,
     ) {
-        self.psos.insert(mode, pso);
+        let _ = self.psos.insert(mode, pso);
     }
 
     pub fn get_mode(
@@ -185,8 +186,9 @@ pub(crate) fn create_shader<C, S, Spec>(
     factory: &mut Spec::Factory,
     multisample_samples: u8,
     blend_modes: Option<&[BlendMode]>,
+    color_format: format::Format,
     debug_id: DebugId,
-) -> GameResult<(ShaderGeneric<Spec, C>, Box<ShaderHandle<Spec>>)>
+) -> GameResult<(ShaderGeneric<Spec, C>, Box<dyn ShaderHandle<Spec>>)>
 where
     C: 'static + Pod + Structure<ConstFormat> + Clone + Copy,
     S: Into<String>,
@@ -206,7 +208,7 @@ where
             graphics::pipe::Init {
                 out: (
                     "Target0",
-                    graphics::GraphicsContext::get_format(),
+                    color_format,
                     ColorMask::all(),
                     Some((*mode).into()),
                 ),
@@ -238,7 +240,7 @@ where
         psos,
         active_blend_mode: blend_modes[0],
     };
-    let draw: Box<ShaderHandle<Spec>> = Box::new(program);
+    let draw: Box<dyn ShaderHandle<Spec>> = Box::new(program);
 
     let id = 0;
     let shader = ShaderGeneric {
@@ -250,8 +252,9 @@ where
     Ok((shader, draw))
 }
 
-impl<C> Shader<C>
+impl<Spec, C> ShaderGeneric<Spec, C>
 where
+    Spec: graphics::BackendSpec,
     C: 'static + Pod + Structure<ConstFormat> + Clone + Copy,
 {
     /// Create a new `Shader` given a gfx pipeline object
@@ -271,13 +274,13 @@ where
         let vertex_source = {
             let mut buf = Vec::new();
             let mut reader = ctx.filesystem.open(vertex_path)?;
-            reader.read_to_end(&mut buf)?;
+            let _ = reader.read_to_end(&mut buf)?;
             buf
         };
         let pixel_source = {
             let mut buf = Vec::new();
             let mut reader = ctx.filesystem.open(pixel_path)?;
-            reader.read_to_end(&mut buf)?;
+            let _ = reader.read_to_end(&mut buf)?;
             buf
         };
         Shader::from_u8(
@@ -306,6 +309,7 @@ where
         blend_modes: Option<&[BlendMode]>,
     ) -> GameResult<Shader<C>> {
         let debug_id = DebugId::get(ctx);
+        let color_format = ctx.gfx_context.color_format();
         let (mut shader, draw) = create_shader(
             vertex_source,
             pixel_source,
@@ -315,6 +319,7 @@ where
             &mut *ctx.gfx_context.factory,
             ctx.gfx_context.multisample_samples,
             blend_modes,
+            color_format,
             debug_id,
         )?;
         shader.id = ctx.gfx_context.shaders.len();
@@ -323,18 +328,23 @@ where
         Ok(shader)
     }
 
-    /// Send data to the GPU for use with the `Shader`
-    pub fn send(&self, ctx: &mut Context, consts: C) -> GameResult<()> {
-        ctx.gfx_context
-            .encoder
-            .update_buffer(&self.buffer, &[consts], 0)?;
-        Ok(())
-    }
-
     /// Gets the shader ID for the `Shader` which is used by the
     /// `GraphicsContext` for identifying shaders in its cache
     pub fn shader_id(&self) -> ShaderId {
         self.id
+    }
+}
+
+impl<C> Shader<C>
+where
+    C: 'static + Pod + Structure<ConstFormat> + Clone + Copy,
+{
+    /// Send data to the GPU for use with the `Shader`
+    pub fn send(&self, ctx: &mut Context, consts: C) -> GameResult {
+        ctx.gfx_context
+            .encoder
+            .update_buffer(&self.buffer, &[consts], 0)?;
+        Ok(())
     }
 }
 
@@ -373,10 +383,10 @@ pub trait ShaderHandle<Spec: graphics::BackendSpec>: fmt::Debug {
         &mut Encoder<Spec::Resources, Spec::CommandBuffer>,
         &Slice<Spec::Resources>,
         &graphics::pipe::Data<Spec::Resources>,
-    ) -> GameResult<()>;
+    ) -> GameResult;
 
     /// Sets the shader program's blend mode
-    fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult<()>;
+    fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult;
 
     /// Gets the shader program's current blend mode
     fn get_blend_mode(&self) -> BlendMode;
@@ -392,14 +402,14 @@ where
         encoder: &mut Encoder<Spec::Resources, Spec::CommandBuffer>,
         slice: &Slice<Spec::Resources>,
         data: &graphics::pipe::Data<Spec::Resources>,
-    ) -> GameResult<()> {
+    ) -> GameResult {
         let pso = self.psos.get_mode(&self.active_blend_mode)?;
         encoder.draw(slice, pso, &ConstData(data, &self.buffer));
         Ok(())
     }
 
-    fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult<()> {
-        self.psos.get_mode(&mode)?;
+    fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult {
+        let _ = self.psos.get_mode(&mode)?;
         self.active_blend_mode = mode;
         Ok(())
     }
@@ -518,7 +528,7 @@ where
             // create a local clone of the program info so that we can remove
             // the var we found from the `constant_buffer`
             let mut program_info = info.clone();
-            program_info.constant_buffers.remove(index);
+            let _ = program_info.constant_buffers.remove(index);
 
             let meta0 = match self.0.link_to(desc, &program_info) {
                 Ok(m) => m,

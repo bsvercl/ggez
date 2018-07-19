@@ -1,3 +1,39 @@
+# 0.5.0 (in progress)
+
+## Added
+
+ * Added line cap and join options
+
+## Changed
+
+ * Updated versions of lots of dependencies.
+ * Minimum rustc version is now 1.26
+ * We now use `winit` instead of `sdl2` for window creation and events!  This involves lots of minor
+   changes, the full extent of which is still being explored.
+ * `DrawParam` now uses the builder pattern instead of being a bare struct, which allows easier conversion from generics (such as `mint` types) as well as simplifying the internal math.
+ * All public-facing API's that take `Point2`, `Vector2` or `Matrix4` should now take
+   `Into<mint::...>` for the appropriate type from the `mint` crate.  This should let users use
+   whatever math library they care to that supports `mint`; currently both `nalgebra` and `cgmath`
+   are options, and `euclid` should be soon.
+ * Moved all the `FilesystemContext` methods into top-level functions in the `filesystem` module,
+   to be consistent with the rest of the API.
+ * What used to be the `TextCached` module is now the `Text` module, replacing all the old text stuff.  This *dramatically* changes the text API, as well as being faster and more powerful.
+ * Various dimension parameters have changed to fit the underlying implementations more closely.  `Image` dimensions have changed from `u32` to `u16`, which they always were but now it's exposed to the API.  Various screen size dimensions have changed from `u32` to `f64`, which allows `winit` to do smooth DPI-independent scaling.
+
+## Deprecated
+
+## Removed
+
+ * The foreground and background colors and associated functions have beeen removed; all colors are
+   now specified purely where they are used for drawing.
+ * Removed deprecated `BoundSpriteBatch` type.
+ * Removed `Context::print_resource_stats()` in favor of `filesystem::print_all()`.
+ * Removed `TTFFont` font type in favor of `GlyphBrush`. [#132](https://github.com/ggez/ggez/issues/132)
+ * Removed bitmap fonts; better support deserves to exist, and there's no reason it can't be its own crate.
+ * Removed the `cargo-resource-root` feature flag; just use `filesystem::mount()` instead.
+
+## Fixed
+
 # 0.4.3
 
 ## Added

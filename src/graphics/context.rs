@@ -3,40 +3,41 @@ use std::rc::Rc;
 
 use gfx::traits::FactoryExt;
 use gfx::Factory;
-use gfx_device_gl;
 use gfx_glyph::{GlyphBrush, GlyphBrushBuilder};
-use gfx_window_sdl;
+use glutin;
+use winit::{self, dpi};
 
-use conf::WindowSetup;
+use conf::{FullscreenType, WindowMode, WindowSetup};
 use context::DebugId;
 use graphics::*;
 
+use GameResult;
+
 /// A structure that contains graphics state.
-/// For instance, background and foreground colors,
+/// For instance,
 /// window info, DPI, rendering pipeline state, etc.
 ///
 /// As an end-user you shouldn't ever have to touch this.
-pub(crate) struct GraphicsContextGeneric<B, C>
+pub(crate) struct GraphicsContextGeneric<B>
 where
-    B: BackendSpec<SurfaceType = C>,
-    C: gfx::format::Formatted,
+    B: BackendSpec,
 {
-    pub(crate) foreground_color: Color,
-    pub(crate) background_color: Color,
     shader_globals: Globals,
-    projection: Matrix4,
+    pub(crate) projection: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
-    pub(crate) white_image: Image,
+    pub(crate) white_image: ImageGeneric<B>,
     pub(crate) screen_rect: Rect,
-    pub(crate) dpi: (f32, f32, f32),
-    pub(crate) color_format: gfx::format::Format,
-    pub(crate) depth_format: gfx::format::Format,
+    color_format: gfx::format::Format,
+    depth_format: gfx::format::Format,
+    srgb: bool,
+    pub(crate) hidpi_factor: f32,
+    pub(crate) os_hidpi_factor: f32,
 
+    // TODO: is this needed?
+    #[allow(unused)]
     pub(crate) backend_spec: B,
-    pub(crate) window: sdl2::video::Window,
+    pub(crate) window: glutin::GlWindow,
     pub(crate) multisample_samples: u8,
-    #[allow(dead_code)]
-    gl_context: sdl2::video::GLContext,
     pub(crate) device: Box<B::Device>,
     pub(crate) factory: Box<B::Factory>,
     pub(crate) encoder: gfx::Encoder<B::Resources, B::CommandBuffer>,
@@ -53,25 +54,14 @@ where
 
     default_shader: ShaderId,
     pub(crate) current_shader: Rc<RefCell<Option<ShaderId>>>,
-    pub(crate) shaders: Vec<Box<ShaderHandle<B>>>,
+    pub(crate) shaders: Vec<Box<dyn ShaderHandle<B>>>,
 
     pub(crate) glyph_brush: GlyphBrush<'static, B::Resources, B::Factory>,
 }
 
-impl<B, C> GraphicsContextGeneric<B, C>
+impl<B> fmt::Debug for GraphicsContextGeneric<B>
 where
-    B: BackendSpec<SurfaceType = C>,
-    C: gfx::format::Formatted,
-{
-    pub(crate) fn get_format() -> gfx::format::Format {
-        C::get_format()
-    }
-}
-
-impl<B, C> fmt::Debug for GraphicsContextGeneric<B, C>
-where
-    B: BackendSpec<SurfaceType = C>,
-    C: gfx::format::Formatted,
+    B: BackendSpec,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "<GraphicsContext: {:p}>", self)
@@ -79,91 +69,118 @@ where
 }
 
 /// A concrete graphics context for GL rendering.
-pub(crate) type GraphicsContext =
-    GraphicsContextGeneric<GlBackendSpec, <GlBackendSpec as BackendSpec>::SurfaceType>;
+pub(crate) type GraphicsContext = GraphicsContextGeneric<GlBackendSpec>;
 
-impl GraphicsContext {
+impl<B> GraphicsContextGeneric<B>
+where
+    B: BackendSpec + 'static,
+{
+    /// TODO: This is sorta redundant with BackendSpec too...?
+    pub(crate) fn new_encoder(&mut self) -> gfx::Encoder<B::Resources, B::CommandBuffer> {
+        let factory = &mut *self.factory;
+        B::get_encoder(factory)
+    }
+
     /// Create a new GraphicsContext
     pub(crate) fn new(
-        video: &sdl2::VideoSubsystem,
+        events_loop: &glutin::EventsLoop,
         window_setup: &WindowSetup,
         window_mode: WindowMode,
-        backend: GlBackendSpec,
+        backend: B,
         debug_id: DebugId,
-    ) -> GameResult<GraphicsContext> {
-        let color_format =
-            <<GlBackendSpec as BackendSpec>::SurfaceType as gfx::format::Formatted>::get_format();
+    ) -> GameResult<Self> {
+        let srgb = window_setup.srgb;
+        let color_format = if srgb {
+            gfx::format::Format(
+                gfx::format::SurfaceType::R8_G8_B8_A8,
+                gfx::format::ChannelType::Srgb,
+            )
+        } else {
+            gfx::format::Format(
+                gfx::format::SurfaceType::R8_G8_B8_A8,
+                gfx::format::ChannelType::Unorm,
+            )
+        };
         let depth_format = gfx::format::Format(
             gfx::format::SurfaceType::D24_S8,
             gfx::format::ChannelType::Unorm,
         );
 
+        // TODO: Alter window size based on hidpi.
+        // Can't get it from window, can we get it from
+        // monitor info...?
+
         // WINDOW SETUP
-        let gl = video.gl_attr();
-        gl.set_context_version(backend.major, backend.minor);
-        gl.set_context_profile(sdl2::video::GLProfile::Core);
-        gl.set_red_size(5);
-        gl.set_green_size(5);
-        gl.set_blue_size(5);
-        gl.set_alpha_size(8);
-        let samples = window_setup.samples as u8;
-        if samples > 1 {
-            gl.set_multisample_buffers(1);
-            gl.set_multisample_samples(samples);
-        }
-        let mut window_builder =
-            video.window(&window_setup.title, window_mode.width, window_mode.height);
-        if window_setup.resizable {
-            window_builder.resizable();
-        }
-        if window_setup.allow_highdpi {
-            window_builder.allow_highdpi();
-        }
-        let (window, gl_context, device, mut factory, screen_render_target, depth_view) =
-            gfx_window_sdl::init_raw(&video, window_builder, color_format, depth_format)?;
+        let gl_builder = glutin::ContextBuilder::new()
+            //GlRequest::Specific(Api::OpenGl, (backend.major, backend.minor))
+            // TODO: Fix the "Latest" here.
+            .with_gl(glutin::GlRequest::Latest)
+            .with_gl_profile(glutin::GlProfile::Core)
+            .with_multisampling(window_setup.samples as u16)
+            // TODO: Better pixel format here?
+            .with_pixel_format(8, 8)
+            .with_vsync(window_setup.vsync);
 
-        GraphicsContext::set_vsync(video, window_mode.vsync)?;
+        let mut window_builder = glutin::WindowBuilder::new()
+            .with_title(window_setup.title.clone())
+            .with_transparency(window_setup.transparent)
+            .with_resizable(window_mode.resizable);
 
-        let display_index = window.display_index()?;
-        let dpi = window.subsystem().display_dpi(display_index)?;
+        window_builder = if !window_setup.icon.is_empty() {
+            use winit::Icon;
+            window_builder.with_window_icon(Some(Icon::from_path(&window_setup.icon)?))
+        } else {
+            window_builder
+        };
 
-        GraphicsContext::set_vsync(video, window_mode.vsync)?;
+        let (window, device, mut factory, screen_render_target, depth_view) = backend.init(
+            window_builder,
+            gl_builder,
+            events_loop,
+            color_format,
+            depth_format,
+        );
+
+        // See https://docs.rs/winit/0.16.1/winit/dpi/index.html for
+        // an excellent explaination of how this works.
+        let os_hidpi_factor = window.get_hidpi_factor() as f32;
+        let hidpi_factor = if window_mode.hidpi {
+            os_hidpi_factor
+        } else {
+            1.0
+        };
+
+        // TODO: see winit #548 about DPI.
         {
-            // Log a bunch of OpenGL state info pulled out of SDL and gfx
-            let vsync = video.gl_get_swap_interval();
-            let gl_attr = video.gl_attr();
-            let (major, minor) = gl_attr.context_version();
-            let profile = gl_attr.context_profile();
-            let (w, h) = window.size();
-            let (dw, dh) = window.drawable_size();
-            let info = device.get_info();
+            // TODO: improve.
+            // Log a bunch of OpenGL state info pulled out of winit and gfx
+            let api = window.get_api();
+            let dpi::LogicalSize {
+                width: w,
+                height: h,
+            } = window
+                .get_outer_size()
+                .ok_or_else(|| GameError::VideoError("Window doesn't exist!".to_owned()))?;
+            let dpi::LogicalSize {
+                width: dw,
+                height: dh,
+            } = window
+                .get_inner_size()
+                .ok_or_else(|| GameError::VideoError("Window doesn't exist!".to_owned()))?;
             debug!("Window created.");
+            let (major, minor) = backend.version_tuple();
             debug!(
                 "  Asked for     OpenGL {}.{} Core, vsync: {}",
-                backend.major, backend.minor, window_mode.vsync
+                major, minor, window_setup.vsync
             );
-            debug!(
-                "  Actually got: OpenGL {}.{} {:?}, vsync: {:?}",
-                major, minor, profile, vsync
-            );
-            debug!(
-                "  Window size: {}x{}, drawable size: {}x{}, DPI: {:?}",
-                w, h, dw, dh, dpi
-            );
-            debug!(
-                "  Driver vendor: {}, renderer {}, version {:?}, shading language {:?}",
-                info.platform_name.vendor,
-                info.platform_name.renderer,
-                info.version,
-                info.shading_language
-            );
+            debug!("  Actually got: OpenGL ?.? {:?}, vsync: ?", api);
+            debug!("  Window size: {}x{}, drawable size: {}x{}", w, h, dw, dh);
+            let device_info = backend.get_info(&device);
+            debug!("  {}", device_info);
         }
 
         // GFX SETUP
-        let mut encoder: gfx::Encoder<
-            gfx_device_gl::Resources,
-            gfx_device_gl::CommandBuffer,
-        > = factory.create_command_buffer().into();
+        let mut encoder = B::get_encoder(&mut factory);
 
         let blend_modes = [
             BlendMode::Alpha,
@@ -175,6 +192,7 @@ impl GraphicsContext {
             BlendMode::Lighten,
             BlendMode::Darken,
         ];
+        let multisample_samples = window_setup.samples as u8;
         let (shader, draw) = create_shader(
             include_bytes!("shader/basic_150.glslv"),
             include_bytes!("shader/basic_150.glslf"),
@@ -182,8 +200,9 @@ impl GraphicsContext {
             "Empty",
             &mut encoder,
             &mut factory,
-            samples,
+            multisample_samples,
             Some(&blend_modes[..]),
+            color_format,
             debug_id,
         )?;
 
@@ -203,20 +222,21 @@ impl GraphicsContext {
         quad_slice.instances = Some((1, 0));
 
         let globals_buffer = factory.create_constant_buffer(1);
-        let mut samplers: SamplerCache<GlBackendSpec> = SamplerCache::new();
+        let mut samplers: SamplerCache<B> = SamplerCache::new();
         let sampler_info =
             texture::SamplerInfo::new(texture::FilterMethod::Bilinear, texture::WrapMode::Clamp);
         let sampler = samplers.get_or_insert(sampler_info, &mut factory);
-        let white_image = Image::make_raw(
+        let white_image = ImageGeneric::make_raw(
             &mut factory,
             &sampler_info,
             1,
             1,
             &[255, 255, 255, 255],
+            color_format,
             debug_id,
         )?;
         let texture = white_image.texture.clone();
-        let typed_thingy = super::GlBackendSpec::raw_to_typed_shader_resource(texture);
+        let typed_thingy = backend.raw_to_typed_shader_resource(texture);
 
         let data = pipe::Data {
             vbuf: quad_vertex_buffer.clone(),
@@ -228,33 +248,32 @@ impl GraphicsContext {
 
         // Set initial uniform values
         let left = 0.0;
-        let right = window_mode.width as f32;
+        let right = window_mode.width;
         let top = 0.0;
-        let bottom = window_mode.height as f32;
+        let bottom = window_mode.height;
         let initial_projection = Matrix4::identity(); // not the actual initial projection matrix, just placeholder
         let initial_transform = Matrix4::identity();
         let globals = Globals {
             mvp_matrix: initial_projection.into(),
         };
 
-        let mut gfx = GraphicsContext {
-            foreground_color: types::WHITE,
-            background_color: Color::new(0.1, 0.2, 0.3, 1.0),
+        let mut gfx = Self {
             shader_globals: globals,
             projection: initial_projection,
             modelview_stack: vec![initial_transform],
             white_image,
             screen_rect: Rect::new(left, top, right - left, bottom - top),
-            dpi: dpi,
-            color_format: color_format,
-            depth_format: depth_format,
+            color_format,
+            depth_format,
+            srgb,
+            hidpi_factor,
+            os_hidpi_factor,
 
             backend_spec: backend,
             window,
-            multisample_samples: samples,
-            gl_context,
-            device: Box::new(device),
-            factory: Box::new(factory),
+            multisample_samples,
+            device: Box::new(device as B::Device),
+            factory: Box::new(factory as B::Factory),
             encoder,
             screen_render_target,
             depth_view,
@@ -275,8 +294,8 @@ impl GraphicsContext {
         gfx.set_window_mode(window_mode)?;
 
         // Calculate and apply the actual initial projection matrix
-        let w = window_mode.width as f32;
-        let h = window_mode.height as f32;
+        let w = window_mode.width;
+        let h = window_mode.height;
         let rect = Rect {
             x: 0.0,
             y: 0.0,
@@ -291,7 +310,7 @@ impl GraphicsContext {
 
     /// Sends the current value of the graphics context's shader globals
     /// to the graphics card.
-    pub(crate) fn update_globals(&mut self) -> GameResult<()> {
+    pub(crate) fn update_globals(&mut self) -> GameResult {
         self.encoder
             .update_buffer(&self.data.globals, &[self.shader_globals], 0)?;
         Ok(())
@@ -318,7 +337,7 @@ impl GraphicsContext {
     /// (model) matrix stack.
     pub(crate) fn pop_transform(&mut self) {
         if self.modelview_stack.len() > 1 {
-            self.modelview_stack.pop();
+            let _ = self.modelview_stack.pop();
         }
     }
 
@@ -348,12 +367,12 @@ impl GraphicsContext {
 
     /// Converts the given `DrawParam` into an `InstanceProperties` object and
     /// sends it to the graphics card at the front of the instance buffer.
-    pub(crate) fn update_instance_properties(&mut self, draw_params: DrawParam) -> GameResult<()> {
+    pub(crate) fn update_instance_properties(&mut self, draw_params: DrawTransform) -> GameResult {
         // This clone is cheap since draw_params is Copy
+        // TODO: Clean up
         let mut new_draw_params = draw_params;
-        let fg = Some(self.foreground_color);
-        new_draw_params.color = draw_params.color.or(fg);
-        let properties = new_draw_params.into();
+        new_draw_params.color = draw_params.color;
+        let properties = new_draw_params.to_instance_properties(self.srgb);
         self.encoder
             .update_buffer(&self.data.rect_instance_properties, &[properties], 0)?;
         Ok(())
@@ -361,10 +380,7 @@ impl GraphicsContext {
 
     /// Draws with the current encoder, slice, and pixel shader. Prefer calling
     /// this method from `Drawables` so that the pixel shader gets used
-    pub(crate) fn draw(
-        &mut self,
-        slice: Option<&gfx::Slice<gfx_device_gl::Resources>>,
-    ) -> GameResult<()> {
+    pub(crate) fn draw(&mut self, slice: Option<&gfx::Slice<B::Resources>>) -> GameResult {
         let slice = slice.unwrap_or(&self.quad_slice);
         let id = (*self.current_shader.borrow()).unwrap_or(self.default_shader);
         let shader_handle = &self.shaders[id];
@@ -374,7 +390,7 @@ impl GraphicsContext {
     }
 
     /// Sets the blend mode of the active shader
-    pub(crate) fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult<()> {
+    pub(crate) fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult {
         let id = (*self.current_shader.borrow()).unwrap_or(self.default_shader);
         let shader_handle = &mut self.shaders[id];
         shader_handle.set_blend_mode(mode)
@@ -411,47 +427,129 @@ impl GraphicsContext {
         self.projection
     }
 
-    /// Just a helper method to set window mode from a WindowMode object.
-    pub(crate) fn set_window_mode(&mut self, mode: WindowMode) -> GameResult<()> {
-        let window = &mut self.window;
-        window.set_size(mode.width, mode.height)?;
-        // SDL sets "bordered" but Love2D does "not bordered";
-        // we use the Love2D convention.
-        window.set_bordered(!mode.borderless);
-        window.set_fullscreen(mode.fullscreen_type.into())?;
-        window.set_minimum_size(mode.min_width, mode.min_height)?;
-        window.set_maximum_size(mode.max_width, mode.max_height)?;
+    /// Sets window mode from a WindowMode object.
+    pub(crate) fn set_window_mode(&mut self, mode: WindowMode) -> GameResult {
+        let window = &self.window;
+
+        if mode.hidpi {
+            self.hidpi_factor = window.get_hidpi_factor() as f32;
+        } else {
+            self.hidpi_factor = 1.0;
+        }
+
+        window.set_maximized(mode.maximized);
+
+        // TODO: find out if single-dimension constraints are possible.
+        let mut min_dimensions = None;
+        if mode.min_width > 0.0 && mode.min_height > 0.0 {
+            min_dimensions = Some(dpi::LogicalSize {
+                width: mode.min_width.into(),
+                height: mode.min_height.into(),
+            });
+        }
+        window.set_min_dimensions(min_dimensions);
+
+        let mut max_dimensions = None;
+        if mode.max_width > 0.0 && mode.max_height > 0.0 {
+            max_dimensions = Some(dpi::LogicalSize {
+                width: mode.max_width.into(),
+                height: mode.max_height.into(),
+            });
+        }
+        window.set_max_dimensions(max_dimensions);
+
+        let monitor = window.get_current_monitor();
+        match mode.fullscreen_type {
+            FullscreenType::Windowed => {
+                window.set_fullscreen(None);
+                window.set_decorations(!mode.borderless);
+                window.set_inner_size(dpi::LogicalSize {
+                    width: mode.width.into(),
+                    height: mode.height.into(),
+                });
+            }
+            FullscreenType::True => {
+                window.set_fullscreen(Some(monitor));
+                window.set_inner_size(dpi::LogicalSize {
+                    width: mode.width.into(),
+                    height: mode.height.into(),
+                });
+            }
+            FullscreenType::Desktop => {
+                let position = monitor.get_position();
+                let dimensions = monitor.get_dimensions();
+                let hidpi_factor = window.get_hidpi_factor();
+                self.hidpi_factor = hidpi_factor as f32;
+                window.set_fullscreen(None);
+                window.set_decorations(false);
+                window.set_inner_size(dimensions.to_logical(hidpi_factor));
+                window.set_position(position.to_logical(hidpi_factor));
+            }
+        }
         Ok(())
     }
 
-    /// Another helper method to set vsync.
-    pub(crate) fn set_vsync(video: &sdl2::VideoSubsystem, vsync: bool) -> GameResult<()> {
-        let vsync_int = if vsync { 1 } else { 0 };
-        if video.gl_set_swap_interval(vsync_int) {
-            Ok(())
-        } else {
-            let err = sdl2::get_error();
-            Err(GameError::VideoError(err))
-        }
-    }
-
-    /// Communicates changes in the viewport size between SDL and gfx.
+    /// Communicates changes in the viewport size between glutin and gfx.
     ///
     /// Also replaces gfx.screen_render_target and gfx.depth_view,
     /// so it may cause squirrelliness to
     /// happen with canvases or other things that touch it.
     pub(crate) fn resize_viewport(&mut self) {
-        // Basically taken from the definition of 
-        // gfx_window_sdl::update_views()
-        let dim = self.screen_render_target.get_dimensions();
-        assert_eq!(dim, self.depth_view.get_dimensions());
-        if let Some((cv, dv)) = gfx_window_sdl::update_views_raw(
-            &self.window, 
-            dim, 
-            self.color_format,
-            self.depth_format) {
+        // Basically taken from the definition of
+        // gfx_window_glutin::update_views()
+        if let Some((cv, dv)) = self.backend_spec.resize_viewport(
+            &self.screen_render_target,
+            &self.depth_view,
+            self.color_format(),
+            self.depth_format(),
+            &self.window,
+        ) {
             self.screen_render_target = cv;
             self.depth_view = dv;
         }
+    }
+
+    /// Returns the screen color format used by the context.
+    pub(crate) fn color_format(&self) -> gfx::format::Format {
+        self.color_format
+    }
+
+    /// Returns the screen depth format used by the context.
+    ///
+    pub(crate) fn depth_format(&self) -> gfx::format::Format {
+        self.depth_format
+    }
+
+    /// Simple shortcut to check whether the context's color
+    /// format is SRGB or not.
+    pub(crate) fn is_srgb(&self) -> bool {
+        if let gfx::format::Format(_, gfx::format::ChannelType::Srgb) = self.color_format() {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// This is a filthy hack allow users to override hidpi
+    /// scaling if they want to.  Everything that winit touches
+    /// is scaled by the hidpi factor that it uses, such as monitor
+    /// resolutions and mouse positions.  If you want display-independent
+    /// scaling this is Good, if you want pixel-perfect scaling this
+    /// is Bad.  We are currently operating on the assumption that you want
+    /// pixel-perfect scaling.
+    ///
+    /// See <https://github.com/tomaka/winit/issues/591#issuecomment-403096230>
+    /// and related issues for fuller discussion.
+    pub(crate) fn hack_event_hidpi(&self, event: &winit::Event) -> winit::Event {
+        event.clone()
+    }
+
+    /// Takes a coordinate in winit's Logical scale (aka everything we touch)
+    /// and turns it into the equivalent in PhysicalScale, allowing us to
+    /// override the DPI if necessary.
+    pub(crate) fn to_physical_dpi(&self, x: f32, y: f32) -> (f32, f32) {
+        let logical = dpi::LogicalPosition::new(x as f64, y as f64);
+        let physical = dpi::PhysicalPosition::from_logical(logical, self.hidpi_factor.into());
+        (physical.x as f32, physical.y as f32)
     }
 }

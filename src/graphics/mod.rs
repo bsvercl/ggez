@@ -16,7 +16,7 @@ use gfx::texture;
 use gfx::Device;
 use gfx::Factory;
 use gfx_device_gl;
-use sdl2;
+use glutin::{self, GlContext};
 
 use conf;
 use conf::WindowMode;
@@ -32,8 +32,8 @@ mod image;
 mod mesh;
 mod shader;
 mod text;
-mod text_cached;
 mod types;
+use mint;
 use nalgebra as na;
 
 pub mod spritebatch;
@@ -45,37 +45,79 @@ pub use self::image::*;
 pub use self::mesh::*;
 pub use self::shader::*;
 pub use self::text::*;
-pub use self::text_cached::*;
 pub use self::types::*;
+
+type BuggoSurfaceFormat = gfx::format::Srgba8;
+type ShaderResourceType = [f32; 4];
 
 /// A marker trait saying that something is a label for a particular backend,
 /// with associated gfx-rs types for that backend.
 pub trait BackendSpec: fmt::Debug {
-    /// Surface type
-    type SurfaceType: gfx::format::Formatted;
     /// gfx resource type
     type Resources: gfx::Resources;
     /// gfx factory type
-    type Factory: gfx::Factory<Self::Resources>;
+    type Factory: gfx::Factory<Self::Resources> + Clone;
     /// gfx command buffer type
     type CommandBuffer: gfx::CommandBuffer<Self::Resources>;
     /// gfx device type
     type Device: gfx::Device<Resources = Self::Resources, CommandBuffer = Self::CommandBuffer>;
 
     /// A helper function to take a RawShaderResourceView and turn it into a typed one based on
-    /// the surface type defined in a `BackendSpec`
+    /// the surface type defined in a `BackendSpec`.
+    ///
+    /// But right now we only allow surfaces that use [f32;4] colors, so we can freely
+    /// hardcode this in the `ShaderResourceType` type.
     fn raw_to_typed_shader_resource(
+        &self,
         texture_view: gfx::handle::RawShaderResourceView<Self::Resources>,
-    ) -> gfx::handle::ShaderResourceView<
-        <Self as BackendSpec>::Resources,
-        <<Self as BackendSpec>::SurfaceType as gfx::format::Formatted>::View,
-    > {
-        let typed_view: gfx::handle::ShaderResourceView<
-            _,
-            <<Self as BackendSpec>::SurfaceType as gfx::format::Formatted>::View,
-        > = gfx::memory::Typed::new(texture_view);
+    ) -> gfx::handle::ShaderResourceView<<Self as BackendSpec>::Resources, ShaderResourceType> {
+        let typed_view: gfx::handle::ShaderResourceView<_, ShaderResourceType> =
+            gfx::memory::Typed::new(texture_view);
         typed_view
     }
+
+    /// Returns the version of the backend, `(major, minor)`.
+    ///
+    /// So for instance if the backend is using OpenGL version 3.2,
+    /// it would return `(3, 2)`.
+    fn version_tuple(&self) -> (u8, u8);
+
+    /// Returns a string containing some backend-dependent info.
+    fn get_info(&self, device: &Self::Device) -> String;
+
+    /// Creates the window.
+    fn init<'a>(
+        &self,
+        window_builder: glutin::WindowBuilder,
+        gl_builder: glutin::ContextBuilder<'a>,
+        events_loop: &glutin::EventsLoop,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+    ) -> (
+        glutin::GlWindow,
+        Self::Device,
+        Self::Factory,
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    );
+
+    /// Create an Encoder for the backend.
+    fn get_encoder(
+        factory: &mut Self::Factory,
+    ) -> gfx::Encoder<Self::Resources, Self::CommandBuffer>;
+
+    /// Resizes the viewport for the backend. (right now assumes a Glutin window...)
+    fn resize_viewport(
+        &self,
+        color_view: &gfx::handle::RawRenderTargetView<Self::Resources>,
+        depth_view: &gfx::handle::RawDepthStencilView<Self::Resources>,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+        window: &glutin::GlWindow,
+    ) -> Option<(
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    )>;
 }
 
 /// A backend specification for OpenGL.
@@ -105,11 +147,82 @@ impl From<conf::Backend> for GlBackendSpec {
 }
 
 impl BackendSpec for GlBackendSpec {
-    type SurfaceType = gfx::format::Srgba8;
     type Resources = gfx_device_gl::Resources;
     type Factory = gfx_device_gl::Factory;
     type CommandBuffer = gfx_device_gl::CommandBuffer;
     type Device = gfx_device_gl::Device;
+
+    fn version_tuple(&self) -> (u8, u8) {
+        (self.major, self.minor)
+    }
+
+    fn init<'a>(
+        &self,
+        window_builder: glutin::WindowBuilder,
+        gl_builder: glutin::ContextBuilder<'a>,
+        events_loop: &glutin::EventsLoop,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+    ) -> (
+        glutin::GlWindow,
+        Self::Device,
+        Self::Factory,
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    ) {
+        use gfx_window_glutin;
+        let (window, device, factory, screen_render_target, depth_view) =
+            gfx_window_glutin::init_raw(
+                window_builder,
+                gl_builder,
+                events_loop,
+                color_format,
+                depth_format,
+            );
+        (window, device, factory, screen_render_target, depth_view)
+    }
+
+    fn get_info(&self, device: &Self::Device) -> String {
+        let info = device.get_info();
+        format!(
+            "Driver vendor: {}, renderer {}, version {:?}, shading language {:?}",
+            info.platform_name.vendor,
+            info.platform_name.renderer,
+            info.version,
+            info.shading_language
+        )
+    }
+
+    fn get_encoder(
+        factory: &mut Self::Factory,
+    ) -> gfx::Encoder<Self::Resources, Self::CommandBuffer> {
+        factory.create_command_buffer().into()
+    }
+
+    fn resize_viewport(
+        &self,
+        color_view: &gfx::handle::RawRenderTargetView<Self::Resources>,
+        depth_view: &gfx::handle::RawDepthStencilView<Self::Resources>,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+        window: &glutin::GlWindow,
+    ) -> Option<(
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    )> {
+        // Basically taken from the definition of
+        // gfx_window_glutin::update_views()
+        let dim = color_view.get_dimensions();
+        assert_eq!(dim, depth_view.get_dimensions());
+        use gfx_window_glutin;
+        if let Some((cv, dv)) =
+            gfx_window_glutin::update_views_raw(window, dim, color_format, depth_format)
+        {
+            Some((cv, dv))
+        } else {
+            None
+        }
+    }
 }
 
 const QUAD_VERTS: [Vertex; 4] = [
@@ -167,8 +280,14 @@ gfx_defines!{
         tex: gfx::TextureSampler<[f32; 4]> = "t_Texture",
         globals: gfx::ConstantBuffer<Globals> = "Globals",
         rect_instance_properties: gfx::InstanceBuffer<InstanceProperties> = (),
+        // The default values here are overwritten by the
+        // pipeline init values in `shader::create_shader()`.
         out: gfx::RawRenderTarget =
-          ("Target0", GraphicsContext::get_format(), gfx::state::ColorMask::all(), Some(gfx::preset::blend::ALPHA)),
+          ("Target0",
+           gfx::format::Format(gfx::format::SurfaceType::R8_G8_B8_A8, gfx::format::ChannelType::Srgb),
+           gfx::state::ColorMask::all(), Some(gfx::preset::blend::ALPHA)
+          ),
+        // out: gfx::RawRenderTarget = "Target0",
     }
 }
 
@@ -181,24 +300,6 @@ impl Default for InstanceProperties {
             col3: [1.0, 0.0, 1.0, 0.0],
             col4: [1.0, 0.0, 0.0, 1.0],
             color: [1.0, 1.0, 1.0, 1.0],
-        }
-    }
-}
-
-impl From<DrawParam> for InstanceProperties {
-    fn from(p: DrawParam) -> Self {
-        let mat: [[f32; 4]; 4] = p.into_matrix().into();
-        // SRGB BUGGO: Only convert if the color format is srgb!
-        let linear_color: types::LinearColor = p.color
-            .expect("Converting DrawParam to InstanceProperties had None for a color; this should never happen!")
-            .into();
-        Self {
-            src: p.src.into(),
-            col1: mat[0],
-            col2: mat[1],
-            col3: mat[2],
-            col4: mat[3],
-            color: linear_color.into(),
         }
     }
 }
@@ -257,16 +358,19 @@ impl From<gfx::buffer::CreationError> for GameError {
 // DRAWING
 // **********************************************************************
 
-trait TransformRawRenderTargetViewToRenderTargetView<F: gfx::format::Formatted> {
-    type Result;
-}
-
 /// Clear the screen to the background color.
-pub fn clear(ctx: &mut Context) {
+/// TODO: Into<Color> ?
+pub fn clear(ctx: &mut Context, color: Color) {
     let gfx = &mut ctx.gfx_context;
-    // SRGB BUGGO: Only convert when drawing on srgb surface
-    let linear_color: types::LinearColor = gfx.background_color.into();
-    type ColorFormat = <GlBackendSpec as BackendSpec>::SurfaceType;
+    // SRGB BUGGO: Only convert when drawing on srgb surface?
+    // I actually can't make it make any difference; fiddle more.
+    let linear_color: types::LinearColor = color.into();
+    // SRGB BUGGO: Need a clear_raw() method here,
+    // which currently isn't released, see
+    // https://github.com/gfx-rs/gfx/pull/2197
+    // So for now we wing it.
+    type ColorFormat = BuggoSurfaceFormat;
+
     let typed_render_target: gfx::handle::RenderTargetView<_, ColorFormat> =
         gfx::memory::Typed::new(gfx.data.out.clone());
     gfx.encoder.clear(&typed_render_target, linear_color.into());
@@ -274,20 +378,20 @@ pub fn clear(ctx: &mut Context) {
 
 /// Draws the given `Drawable` object to the screen by calling its
 /// `draw()` method.
-pub fn draw(ctx: &mut Context, drawable: &Drawable, dest: Point2, rotation: f32) -> GameResult<()> {
-    drawable.draw(ctx, dest, rotation)
-}
-
-/// Draws the given `Drawable` object to the screen by calling its `draw_ex()` method.
-pub fn draw_ex(ctx: &mut Context, drawable: &Drawable, params: DrawParam) -> GameResult<()> {
-    drawable.draw_ex(ctx, params)
+pub fn draw<D, T>(ctx: &mut Context, drawable: &D, params: T) -> GameResult
+where
+    D: Drawable,
+    T: Into<DrawTransform>,
+{
+    let params = params.into();
+    drawable.draw(ctx, DrawTransform::from(params))
 }
 
 /// Tells the graphics system to actually put everything on the screen.
 /// Call this at the end of your `EventHandler`'s `draw()` method.
 ///
 /// Unsets any active canvas.
-pub fn present(ctx: &mut Context) {
+pub fn present(ctx: &mut Context) -> GameResult<()> {
     let gfx = &mut ctx.gfx_context;
     gfx.data.out = gfx.screen_render_target.clone();
     // We might want to give the user more control over when the
@@ -295,8 +399,9 @@ pub fn present(ctx: &mut Context) {
     // to do their own gfx drawing.  HOWEVER, the whole pipeline type
     // thing is a bigger hurdle, so this is fine for now.
     gfx.encoder.flush(&mut *gfx.device);
-    gfx.window.gl_swap_window();
+    gfx.window.swap_buffers()?;
     gfx.device.cleanup();
+    Ok(())
 }
 
 /// Take a screenshot by outputting the current render surface
@@ -307,7 +412,7 @@ pub fn screenshot(ctx: &mut Context) -> GameResult<Image> {
 
     let gfx = &mut ctx.gfx_context;
     let (w, h, _depth, aa) = gfx.data.out.get_dimensions();
-    let surface_format = gfx.color_format;
+    let surface_format = gfx.color_format();
     let gfx::format::Format(surface_type, channel_type) = surface_format;
 
     let texture_kind = gfx::texture::Kind::D2(w, h, aa);
@@ -359,28 +464,15 @@ pub fn screenshot(ctx: &mut Context) -> GameResult<Image> {
         texture_handle: target_texture,
         sampler_info: gfx.default_sampler_info,
         blend_mode: None,
-        width: u32::from(w),
-        height: u32::from(h),
-        debug_id: debug_id,
+        width: w,
+        height: h,
+        debug_id,
     };
 
     Ok(image)
 }
 
-/*
-// Draw an arc.
-// Punting on this until later.
-pub fn arc(_ctx: &mut Context,
-           _mode: DrawMode,
-           _point: Point,
-           _radius: f32,
-           _angle1: f32,
-           _angle2: f32,
-           _segments: u32)
-           -> GameResult<()> {
-    unimplemented!();
-}
-*/
+// TODO: Make all of these take Into<Color>???
 
 /// Draw a circle.
 ///
@@ -388,15 +480,19 @@ pub fn arc(_ctx: &mut Context,
 /// you should create the `Mesh` yourself.
 ///
 /// For the meaning of the `tolerance` parameter, [see here](https://docs.rs/lyon_geom/0.9.0/lyon_geom/#flattening).
-pub fn circle(
+pub fn circle<P>(
     ctx: &mut Context,
+    color: Color,
     mode: DrawMode,
-    point: Point2,
+    point: P,
     radius: f32,
     tolerance: f32,
-) -> GameResult<()> {
+) -> GameResult
+where
+    P: Into<mint::Point2<f32>>,
+{
     let m = Mesh::new_circle(ctx, mode, point, radius, tolerance)?;
-    m.draw(ctx, Point2::origin(), 0.0)
+    m.draw(ctx, DrawParam::new().color(color))
 }
 
 /// Draw an ellipse.
@@ -405,35 +501,46 @@ pub fn circle(
 /// you should create the `Mesh` yourself.
 ///
 /// For the meaning of the `tolerance` parameter, [see here](https://docs.rs/lyon_geom/0.9.0/lyon_geom/#flattening).
-pub fn ellipse(
+pub fn ellipse<P>(
     ctx: &mut Context,
+    color: Color,
     mode: DrawMode,
-    point: Point2,
+    point: P,
     radius1: f32,
     radius2: f32,
     tolerance: f32,
-) -> GameResult<()> {
+) -> GameResult
+where
+    P: Into<mint::Point2<f32>>,
+{
     let m = Mesh::new_ellipse(ctx, mode, point, radius1, radius2, tolerance)?;
-    m.draw(ctx, Point2::origin(), 0.0)
+    m.draw(ctx, DrawParam::new().color(color))
 }
 
 /// Draws a line of one or more connected segments.
 ///
 /// Allocates a new `Mesh`, draws it, and throws it away, so if you are drawing many of them
 /// you should create the `Mesh` yourself.
-pub fn line(ctx: &mut Context, points: &[Point2], width: f32) -> GameResult<()> {
+pub fn line<P>(ctx: &mut Context, color: Color, points: &[P], width: f32) -> GameResult
+where
+    P: Into<mint::Point2<f32>> + Clone,
+{
     let m = Mesh::new_line(ctx, points, width)?;
-    m.draw(ctx, Point2::origin(), 0.0)
+    m.draw(ctx, DrawParam::new().color(color))
 }
 
 /// Draws points (as rectangles)
 ///
 /// Allocates a new `Mesh`, draws it, and throws it away, so if you are drawing many of them
 /// you should create the `Mesh` yourself.
-pub fn points(ctx: &mut Context, points: &[Point2], point_size: f32) -> GameResult<()> {
+pub fn points<P>(ctx: &mut Context, color: Color, points: &[P], point_size: f32) -> GameResult
+where
+    P: Into<mint::Point2<f32>> + Clone,
+{
+    let points = points.into_iter().cloned().map(P::into);
     for p in points {
         let r = Rect::new(p.x, p.y, point_size, point_size);
-        rectangle(ctx, DrawMode::Fill, r)?;
+        rectangle(ctx, color, DrawMode::Fill, r)?;
     }
     Ok(())
 }
@@ -442,28 +549,19 @@ pub fn points(ctx: &mut Context, points: &[Point2], point_size: f32) -> GameResu
 ///
 /// Allocates a new `Mesh`, draws it, and throws it away, so if you are drawing many of them
 /// you should create the `Mesh` yourself.
-pub fn polygon(ctx: &mut Context, mode: DrawMode, vertices: &[Point2]) -> GameResult<()> {
+pub fn polygon<P>(ctx: &mut Context, color: Color, mode: DrawMode, vertices: &[P]) -> GameResult
+where
+    P: Into<mint::Point2<f32>> + Clone,
+{
     let m = Mesh::new_polygon(ctx, mode, vertices)?;
-    m.draw(ctx, Point2::origin(), 0.0)
+    m.draw(ctx, DrawParam::new().color(color))
 }
-
-// Renders text with the default font.
-// Not terribly efficient as it re-renders the text with each call,
-// but good enough for debugging.
-// Doesn't actually work, double-borrow on ctx.  Bah.
-// pub fn print(ctx: &mut Context, dest: Point, text: &str) -> GameResult<()> {
-//     let rendered_text = {
-//         let font = &ctx.default_font;
-//         text::Text::new(ctx, text, font)?
-//     };
-//     draw(ctx, &rendered_text, dest, 0.0)
-// }
 
 /// Draws a rectangle.
 ///
 /// Allocates a new `Mesh`, draws it, and throws it away, so if you are drawing many of them
 /// you should create the `Mesh` yourself.
-pub fn rectangle(ctx: &mut Context, mode: DrawMode, rect: Rect) -> GameResult<()> {
+pub fn rectangle(ctx: &mut Context, color: Color, mode: DrawMode, rect: Rect) -> GameResult {
     let x1 = rect.x;
     let x2 = rect.x + rect.w;
     let y1 = rect.y;
@@ -474,22 +572,12 @@ pub fn rectangle(ctx: &mut Context, mode: DrawMode, rect: Rect) -> GameResult<()
         Point2::new(x2, y2),
         Point2::new(x1, y2),
     ];
-    polygon(ctx, mode, &pts)
+    polygon(ctx, color, mode, &pts)
 }
 
 // **********************************************************************
 // GRAPHICS STATE
 // **********************************************************************
-
-/// Returns the current background color.
-pub fn get_background_color(ctx: &Context) -> Color {
-    ctx.gfx_context.background_color
-}
-
-/// Returns the current foreground color.
-pub fn get_color(ctx: &Context) -> Color {
-    ctx.gfx_context.foreground_color
-}
 
 /// Get the default filter mode for new images.
 pub fn get_default_filter(ctx: &Context) -> FilterMode {
@@ -501,17 +589,11 @@ pub fn get_default_filter(ctx: &Context) -> FilterMode {
 /// It is supposed to be human-readable and will change; do not try to parse
 /// information out of it!
 pub fn get_renderer_info(ctx: &Context) -> GameResult<String> {
-    let video = ctx.sdl_context.video()?;
-
-    let gl = video.gl_attr();
-
+    let backend_info = ctx.gfx_context.backend_spec.get_info(&*ctx.gfx_context.device);
     Ok(format!(
-        "Requested GL {}.{} Core profile, actually got GL {}.{} {:?} profile.",
-        ctx.gfx_context.backend_spec.major,
-        ctx.gfx_context.backend_spec.minor,
-        gl.context_major_version(),
-        gl.context_minor_version(),
-        gl.context_profile()
+        "Requested OpenGL {}.{} Core profile, actually got {}.",
+        ctx.gfx_context.backend_spec.major, ctx.gfx_context.backend_spec.minor,
+        backend_info
     ))
 }
 
@@ -522,19 +604,6 @@ pub fn get_renderer_info(ctx: &Context) -> GameResult<String> {
 /// will be negative.
 pub fn get_screen_coordinates(ctx: &Context) -> Rect {
     ctx.gfx_context.screen_rect
-}
-
-/// Sets the background color.  Default: blue.
-pub fn set_background_color(ctx: &mut Context, color: Color) {
-    ctx.gfx_context.background_color = color;
-}
-
-/// Sets the foreground color, which will be used for drawing
-/// rectangles, lines, etc.  Default: white.
-pub fn set_color(ctx: &mut Context, color: Color) -> GameResult<()> {
-    let gfx = &mut ctx.gfx_context;
-    gfx.foreground_color = color;
-    Ok(())
 }
 
 /// Sets the default filter mode used to scale images.
@@ -560,7 +629,7 @@ pub fn set_default_filter(ctx: &mut Context, mode: FilterMode) {
 ///
 /// The `Rect`'s x and y will define the top-left corner of the screen,
 /// and that plus its w and h will define the bottom-right corner.
-pub fn set_screen_coordinates(context: &mut Context, rect: Rect) -> GameResult<()> {
+pub fn set_screen_coordinates(context: &mut Context, rect: Rect) -> GameResult {
     let gfx = &mut context.gfx_context;
     gfx.set_projection_rect(rect);
     gfx.calculate_transform_matrix();
@@ -668,14 +737,14 @@ pub fn origin(context: &mut Context) {
 /// Calculates the new total transformation (Model-View-Projection) matrix
 /// based on the matrices at the top of the transform and view matrix stacks
 /// and sends it to the graphics card.
-pub fn apply_transformations(context: &mut Context) -> GameResult<()> {
+pub fn apply_transformations(context: &mut Context) -> GameResult {
     let gfx = &mut context.gfx_context;
     gfx.calculate_transform_matrix();
     gfx.update_globals()
 }
 
 /// Sets the blend mode of the currently active shader program
-pub fn set_blend_mode(ctx: &mut Context, mode: BlendMode) -> GameResult<()> {
+pub fn set_blend_mode(ctx: &mut Context, mode: BlendMode) -> GameResult {
     ctx.gfx_context.set_blend_mode(mode)
 }
 
@@ -685,96 +754,97 @@ pub fn set_blend_mode(ctx: &mut Context, mode: BlendMode) -> GameResult<()> {
 /// the screen or setting the screen coordinates viewport to some undefined value.
 /// It is recommended to call `set_screen_coordinates()` after changing the window
 /// size to make sure everything is what you want it to be.
-pub fn set_mode(context: &mut Context, mode: WindowMode) -> GameResult<()> {
-    {
-        let gfx = &mut context.gfx_context;
-        gfx.set_window_mode(mode)?;
-    }
-    {
-        let video = &mut context.sdl_context.video()?;
-        GraphicsContext::set_vsync(video, mode.vsync)
-    }
-}
-
-/// Toggles the fullscreen state of the window subsystem
-///
-pub fn set_fullscreen(context: &mut Context, fullscreen: bool) -> GameResult<()> {
-    let fs_type = if fullscreen {
-        sdl2::video::FullscreenType::True
-    } else {
-        sdl2::video::FullscreenType::Off
-    };
+pub fn set_mode(context: &mut Context, mode: WindowMode) -> GameResult {
     let gfx = &mut context.gfx_context;
-    gfx.window.set_fullscreen(fs_type)?;
-
+    gfx.set_window_mode(mode)?;
+    // Save updated mode.
+    context.conf.window_mode = mode;
     Ok(())
 }
 
-/// Queries the fullscreen state of the window subsystem.
-/// If true, then the game is running in fullscreen mode.
-///
-pub fn is_fullscreen(context: &mut Context) -> bool {
-    let gfx = &context.gfx_context;
-    gfx.window.fullscreen_state() == sdl2::video::FullscreenType::True
+/// Sets the window to fullscreen or back.
+pub fn set_fullscreen(context: &mut Context, fullscreen: conf::FullscreenType) -> GameResult {
+    let mut window_mode = context.conf.window_mode;
+    window_mode.fullscreen_type = fullscreen;
+    set_mode(context, window_mode)
 }
 
-/// Sets the window resolution based on the specified width and height
-///
-pub fn set_resolution(context: &mut Context, width: u32, height: u32) -> GameResult<()> {
+/// Sets the window size/resolution to the specified width and height.
+pub fn set_resolution(context: &mut Context, width: f32, height: f32) -> GameResult {
     let mut window_mode = context.conf.window_mode;
     window_mode.width = width;
     window_mode.height = height;
     set_mode(context, window_mode)
 }
 
-/// Returns a `Vec` of `(width, height)` tuples describing what
-/// fullscreen resolutions are available for the given display.
-pub fn get_fullscreen_modes(context: &Context, display_idx: i32) -> GameResult<Vec<(u32, u32)>> {
-    let video = context.sdl_context.video()?;
-    let display_count = video.num_video_displays()?;
-    assert!(display_idx < display_count);
-
-    let num_modes = video.num_display_modes(display_idx)?;
-
-    (0..num_modes)
-        .map(|i| video.display_mode(display_idx, i))
-        .map(|ires| ires.map_err(GameError::VideoError))
-        .map(|gres| gres.map(|dispmode| (dispmode.w as u32, dispmode.h as u32)))
-        .collect()
+/// Sets whether or not the window is resizable.
+pub fn set_resizable(context: &mut Context, resizable: bool) -> GameResult {
+    let mut window_mode = context.conf.window_mode;
+    window_mode.resizable = resizable;
+    set_mode(context, window_mode)
 }
 
-/// Returns the number of connected displays.
-pub fn get_display_count(context: &Context) -> GameResult<i32> {
-    let video = context.sdl_context.video()?;
-    video.num_video_displays().map_err(GameError::VideoError)
+use std::path::Path;
+use winit::Icon;
+/// Sets the window icon.
+pub fn set_window_icon<P: AsRef<Path>>(context: &Context, path: Option<P>) -> GameResult<()> {
+    let icon = match path {
+        Some(path) => Some(Icon::from_path(path)?),
+        None => None,
+    };
+    context.gfx_context.window.set_window_icon(icon);
+    Ok(())
+}
+
+/// Sets the window title.
+pub fn set_window_title(context: &Context, title: &str) {
+    context.gfx_context.window.set_title(title);
 }
 
 /// Returns a reference to the SDL window.
 /// Ideally you should not need to use this because ggez
 /// would provide all the functions you need without having
 /// to dip into SDL itself.  But life isn't always ideal.
-pub fn get_window(context: &Context) -> &sdl2::video::Window {
+pub fn get_window(context: &Context) -> &glutin::Window {
     let gfx = &context.gfx_context;
     &gfx.window
 }
 
-/// Returns a mutable reference to the SDL window.
-pub fn get_window_mut(context: &mut Context) -> &mut sdl2::video::Window {
-    let gfx = &mut context.gfx_context;
-    &mut gfx.window
+/// Returns the size of the window in pixels as (width, height),
+/// including borders, titlebar, etc.
+/// Returns zeros if window doesn't exist.
+/// TODO: Rename, since get_drawable_size is usually what we
+/// actually want
+pub fn get_size(context: &Context) -> (f64, f64) {
+    let gfx = &context.gfx_context;
+    gfx.window
+        .get_outer_size()
+        .map(|logical_size| (logical_size.width, logical_size.height))
+        .unwrap_or((0.0, 0.0))
 }
 
-/// Returns the size of the window in pixels as (width, height).
-pub fn get_size(context: &Context) -> (u32, u32) {
-    let gfx = &context.gfx_context;
-    gfx.window.size()
+/// Returns the hidpi pixel scaling factor that ggez
+/// is currently using.  If  `conf::WindowMode::hidpi`
+/// is true this is equal to `get_os_hidpi_factor()`,
+/// otherwise it is `1.0`.
+pub fn get_hidpi_factor(context: &Context) -> f32 {
+    context.gfx_context.hidpi_factor
+}
+
+/// Returns the hidpi pixel scaling factor that the operating
+/// system says that ggez should be using.
+pub fn get_os_hidpi_factor(context: &Context) -> f32 {
+    context.gfx_context.os_hidpi_factor
 }
 
 /// Returns the size of the window's underlying drawable in pixels as (width, height).
-/// This may return a different value than `get_size()` when run on a platform with high-DPI support
-pub fn get_drawable_size(context: &Context) -> (u32, u32) {
+/// Returns zeros if window doesn't exist.
+pub fn get_drawable_size(context: &Context) -> (f64, f64) {
     let gfx = &context.gfx_context;
-    gfx.window.drawable_size()
+    gfx.window
+        .get_inner_size()
+        .map(|logical_size| (logical_size.width, logical_size.height))
+        .unwrap_or((0.0, 0.0))
 }
 
 /// Returns the gfx-rs `Factory` object for ggez's rendering context.
@@ -842,31 +912,12 @@ pub fn get_gfx_objects(
 
 /// All types that can be drawn on the screen implement the `Drawable` trait.
 pub trait Drawable {
-    /// Actually draws the object to the screen.
-    ///
-    /// This is the most general version of the operation, which is all that
-    /// is required for implementing this trait.
-    fn draw_ex(&self, ctx: &mut Context, param: DrawParam) -> GameResult<()>;
-
     /// Draws the drawable onto the rendering target.
     ///
-    /// It just is a shortcut that calls `draw_ex()` with a default `DrawParam`
-    /// except for the destination and rotation.
-    ///
-    /// * `ctx` - The `Context` this graphic will be rendered to.
-    /// * `dest` - the position to draw the graphic expressed as a `Point2`.
-    /// * `rotation` - orientation of the graphic in radians.
-    ///
-    fn draw(&self, ctx: &mut Context, dest: Point2, rotation: f32) -> GameResult<()> {
-        self.draw_ex(
-            ctx,
-            DrawParam {
-                dest,
-                rotation,
-                ..Default::default()
-            },
-        )
-    }
+    /// ALSO TODO: Expand docs
+    fn draw<D>(&self, ctx: &mut Context, param: D) -> GameResult
+    where
+        D: Into<DrawTransform>;
 
     /// Sets the blend mode to be used when drawing this drawable.
     /// This overrides the general `graphics::set_blend_mode()`.

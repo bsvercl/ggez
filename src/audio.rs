@@ -14,6 +14,7 @@ use std::sync::Arc;
 use rodio;
 
 use context::Context;
+use filesystem;
 use GameError;
 use GameResult;
 
@@ -52,7 +53,7 @@ impl SoundData {
     /// Create a new SoundData from the file at the given path.
     pub fn new<P: AsRef<path::Path>>(context: &mut Context, path: P) -> GameResult<Self> {
         let path = path.as_ref();
-        let file = &mut context.filesystem.open(path)?;
+        let file = &mut filesystem::open(context, path)?;
         SoundData::from_read(file)
     }
 
@@ -68,7 +69,7 @@ impl SoundData {
         R: Read,
     {
         let mut buffer = Vec::new();
-        reader.read_to_end(&mut buffer)?;
+        let _ = reader.read_to_end(&mut buffer)?;
 
         Ok(SoundData::from(buffer))
     }
@@ -138,7 +139,7 @@ impl Source {
     }
 
     /// Plays the Source.
-    pub fn play(&self) -> GameResult<()> {
+    pub fn play(&self) -> GameResult {
         // Creating a new Decoder each time seems a little messy,
         // since it may do checking and data-type detection that is
         // redundant, but it's not super expensive.

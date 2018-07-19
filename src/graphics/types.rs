@@ -2,12 +2,14 @@ use nalgebra as na;
 use std::f32;
 use std::u32;
 
+use super::{FillOptions, StrokeOptions};
+
 /// A 2 dimensional point representing a location
-pub type Point2 = na::Point2<f32>;
+pub(crate) type Point2 = na::Point2<f32>;
 /// A 2 dimensional vector representing an offset of a location
-pub type Vector2 = na::Vector2<f32>;
+pub(crate) type Vector2 = na::Vector2<f32>;
 /// A 4 dimensional matrix representing an arbitrary 3d transformation
-pub type Matrix4 = na::Matrix4<f32>;
+pub(crate) type Matrix4 = na::Matrix4<f32>;
 
 /// A simple 2D rectangle.
 ///
@@ -89,13 +91,17 @@ impl Rect {
 
     /// Checks whether the `Rect` contains a `Point`
     pub fn contains(&self, point: Point2) -> bool {
-        point.x >= self.left() && point.x <= self.right() && point.y <= self.bottom()
+        point.x >= self.left()
+            && point.x <= self.right()
+            && point.y <= self.bottom()
             && point.y >= self.top()
     }
 
     /// Checks whether the `Rect` overlaps another `Rect`
     pub fn overlaps(&self, other: &Rect) -> bool {
-        self.left() <= other.right() && self.right() >= other.left() && self.top() <= other.bottom()
+        self.left() <= other.right()
+            && self.right() >= other.left()
+            && self.top() <= other.bottom()
             && self.bottom() >= other.top()
     }
 
@@ -347,10 +353,14 @@ impl From<LinearColor> for [f32; 4] {
 /// filled or as an outline.
 #[derive(Debug, Copy, Clone)]
 pub enum DrawMode {
-    /// A stroked line with the given width
+    /// A stroked line with the given width.
     Line(f32),
     /// A filled shape.
     Fill,
+    /// A stroked line with given parameters, see `StrokeOptions` documentation.
+    CustomLine(StrokeOptions),
+    /// A filled shape with given parameters, see `FillOptions` documentation.
+    CustomFill(FillOptions),
 }
 
 /// Specifies what blending method to use when scaling up/down images.
@@ -390,7 +400,7 @@ pub type WrapMode = gfx::texture::WrapMode;
 mod tests {
     use super::*;
     #[test]
-    fn test_color_conversions() {
+    fn headless_test_color_conversions() {
         let white = Color::new(1.0, 1.0, 1.0, 1.0);
         let w1 = Color::from((255, 255, 255, 255));
         assert_eq!(white, w1);
@@ -421,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_scaling() {
+    fn headless_test_rect_scaling() {
         let r1 = Rect::new(0.0, 0.0, 128.0, 128.0);
         let r2 = Rect::fraction(0.0, 0.0, 32.0, 32.0, &r1);
         assert_eq!(r2, Rect::new(0.0, 0.0, 0.25, 0.25));
@@ -431,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_contains() {
+    fn headless_test_rect_contains() {
         let r = Rect::new(0.0, 0.0, 128.0, 128.0);
         println!("{} {} {} {}", r.top(), r.bottom(), r.left(), r.right());
         let p = Point2::new(1.0, 1.0);
@@ -442,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_overlaps() {
+    fn headless_test_rect_overlaps() {
         let r1 = Rect::new(0.0, 0.0, 128.0, 128.0);
         let r2 = Rect::new(0.0, 0.0, 64.0, 64.0);
         assert!(r1.overlaps(&r2));
@@ -455,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rect_transform() {
+    fn headless_test_rect_transform() {
         let mut r1 = Rect::new(0.0, 0.0, 64.0, 64.0);
         let r2 = Rect::new(64.0, 64.0, 64.0, 64.0);
         r1.translate(Vector2::new(64.0, 64.0));

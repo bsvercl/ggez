@@ -4,16 +4,16 @@
 extern crate gfx;
 extern crate gfx_device_gl;
 extern crate ggez;
+extern crate nalgebra;
 
 use gfx::texture;
 use gfx::traits::FactoryExt;
 use gfx::Factory;
 
-use ggez::conf;
 use ggez::event;
 use ggez::graphics;
-use ggez::nalgebra as na;
 use ggez::{Context, GameResult};
+use nalgebra as na;
 use std::env;
 use std::f32;
 use std::path;
@@ -68,8 +68,6 @@ fn default_view() -> Isometry3 {
 }
 
 struct MainState {
-    text1: graphics::Text,
-    text2: graphics::Text,
     frames: usize,
     rotation: f32,
 
@@ -81,12 +79,6 @@ struct MainState {
 
 impl MainState {
     fn new(ctx: &mut Context) -> Self {
-        let font = graphics::Font::new(ctx, "/DejaVuSerif.ttf", 18).unwrap();
-        let text1 = graphics::Text::new(ctx, "You can mix ggez and gfx drawing;", &font).unwrap();
-        let text2 =
-            graphics::Text::new(ctx, "it basically draws gfx stuff first, then ggez", &font)
-                .unwrap();
-
         let color_view = graphics::get_screen_render_target(ctx);
         let depth_view = graphics::get_depth_view(ctx);
         let factory = graphics::get_factory(ctx);
@@ -201,8 +193,6 @@ void main() {
         };
 
         MainState {
-            text1,
-            text2,
             frames: 0,
             data,
             pso,
@@ -213,12 +203,12 @@ void main() {
 }
 
 impl event::EventHandler for MainState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
         self.rotation += 0.01;
         Ok(())
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
         // Do gfx-rs drawing
         {
             let (_factory, device, encoder, _depthview, _colorview) =
@@ -239,11 +229,25 @@ impl event::EventHandler for MainState {
         }
 
         // Do ggez drawing
-        let dest_point1 = graphics::Point2::new(10.0, 210.0);
-        let dest_point2 = graphics::Point2::new(10.0, 250.0);
-        graphics::draw(ctx, &self.text1, dest_point1, 0.0)?;
-        graphics::draw(ctx, &self.text2, dest_point2, 0.0)?;
-        graphics::present(ctx);
+        let dest_point1 = na::Point2::new(10.0, 210.0);
+        let dest_point2 = na::Point2::new(10.0, 250.0);
+        // graphics::draw(ctx, &self.text1, (dest_point1,))?;
+        // graphics::draw(ctx, &self.text2, (dest_point2,))?;
+
+        graphics::queue_text(
+            ctx,
+            &graphics::Text::new("You can mix ggez and gfx drawing;"),
+            dest_point1,
+            None,
+        );
+        graphics::queue_text(
+            ctx,
+            &graphics::Text::new("it basically draws gfx stuff first, then ggez"),
+            dest_point2,
+            None,
+        );
+        graphics::draw_queued_text(ctx, graphics::DrawParam::default())?;
+        graphics::present(ctx)?;
         self.frames += 1;
         if (self.frames % 10) == 0 {
             println!("FPS: {}", ggez::timer::get_fps(ctx));
@@ -252,22 +256,19 @@ impl event::EventHandler for MainState {
     }
 }
 
-pub fn main() {
-    let c = conf::Conf::new();
-    let ctx = &mut Context::load_from_conf("cube", "ggez", c).unwrap();
-
-    // We add the CARGO_MANIFEST_DIR/resources do the filesystems paths so
-    // we we look in the cargo project for files.
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+pub fn main() -> GameResult {
+    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let mut path = path::PathBuf::from(manifest_dir);
         path.push("resources");
-        ctx.filesystem.mount(&path, true);
-    }
-
-    let state = &mut MainState::new(ctx);
-    if let Err(e) = event::run(ctx, state) {
-        println!("Error encountered: {}", e);
+        path
     } else {
-        println!("Game exited cleanly.");
-    }
+        path::PathBuf::from("./resources")
+    };
+
+    let cb = ggez::ContextBuilder::new("cube", "ggez")
+        .add_resource_path(resource_dir);
+
+    let (ctx, events_loop) = &mut cb.build()?;
+    let state = &mut MainState::new(ctx);
+    event::run(ctx, events_loop, state)
 }

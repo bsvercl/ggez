@@ -43,33 +43,29 @@ impl Canvas {
     /// Create a new canvas with the given size and number of samples.
     pub fn new(
         ctx: &mut Context,
-        width: u32,
-        height: u32,
+        width: u16,
+        height: u16,
         samples: conf::NumSamples,
     ) -> GameResult<Canvas> {
         let debug_id = DebugId::get(ctx);
-        let (w, h) = (width as u16, height as u16);
         let aa = match samples {
             conf::NumSamples::One => AaMode::Single,
             s => AaMode::Multi(s as u8),
         };
-        let kind = Kind::D2(w, h, aa);
+        let kind = Kind::D2(width, height, aa);
         let levels = 1;
+        let color_format = ctx.gfx_context.color_format();
         let factory = &mut ctx.gfx_context.factory;
         let texture_create_info = gfx::texture::Info {
             kind: kind,
             levels: levels,
-            format: ctx.gfx_context.color_format.0,
+            format: color_format.0,
             bind: Bind::SHADER_RESOURCE | Bind::RENDER_TARGET | Bind::TRANSFER_SRC,
             usage: Usage::Data,
         };
-        let tex = factory.create_texture_raw(
-            texture_create_info,
-            Some(ctx.gfx_context.color_format.1),
-            None,
-        )?;
+        let tex = factory.create_texture_raw(texture_create_info, Some(color_format.1), None)?;
         let resource_desc = gfx::texture::ResourceDesc {
-            channel: ctx.gfx_context.color_format.1,
+            channel: color_format.1,
             layer: None,
             min: 0,
             max: levels - 1,
@@ -77,7 +73,7 @@ impl Canvas {
         };
         let resource = factory.view_texture_as_shader_resource_raw(&tex, resource_desc)?;
         let render_desc = gfx::texture::RenderDesc {
-            channel: ctx.gfx_context.color_format.1,
+            channel: color_format.1,
             level: 0,
             layer: None,
         };
@@ -102,7 +98,8 @@ impl Canvas {
         use graphics;
         let (w, h) = graphics::get_drawable_size(ctx);
         // Default to no multisampling
-        Canvas::new(ctx, w, h, conf::NumSamples::One)
+        // TODO: Use winit's into() to translate f64's more accurately
+        Canvas::new(ctx, w as u16, h as u16, conf::NumSamples::One)
     }
 
     /// Gets the backend `Image` that is being rendered to.
@@ -119,14 +116,20 @@ impl Canvas {
 }
 
 impl Drawable for Canvas {
-    fn draw_ex(&self, ctx: &mut Context, param: DrawParam) -> GameResult<()> {
+    fn draw<D>(&self, ctx: &mut Context, param: D) -> GameResult
+    where
+        D: Into<DrawTransform>,
+    {
+        let param = param.into();
         self.debug_id.assert(ctx);
         // Gotta flip the image on the Y axis here
         // to account for OpenGL's origin being at the bottom-left.
+
+        // TODO: FIX PrimitiveDrawParam
         let mut flipped_param = param;
-        flipped_param.scale.y *= -1.0;
-        flipped_param.dest.y += self.image.height() as f32 * param.scale.y;
-        self.image.draw_ex(ctx, flipped_param)?;
+        // flipped_param.scale.y *= -1.0;
+        // flipped_param.dest.y += self.image.height() as f32 * param.scale.y;
+        self.image.draw(ctx, flipped_param)?;
         Ok(())
     }
     fn set_blend_mode(&mut self, mode: Option<BlendMode>) {

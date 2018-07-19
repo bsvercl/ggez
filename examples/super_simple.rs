@@ -2,9 +2,9 @@
 
 extern crate ggez;
 
-use ggez::conf;
 use ggez::event;
-use ggez::graphics::{self, DrawMode, Point2};
+use ggez::graphics::{self, DrawMode};
+use ggez::nalgebra as na;
 use ggez::{Context, GameResult};
 
 struct MainState {
@@ -19,28 +19,30 @@ impl MainState {
 }
 
 impl event::EventHandler for MainState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
         self.pos_x = self.pos_x % 800.0 + 1.0;
         Ok(())
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        graphics::clear(ctx);
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
         graphics::circle(
             ctx,
+            graphics::WHITE,
             DrawMode::Fill,
-            Point2::new(self.pos_x, 380.0),
+            na::Point2::new(self.pos_x, 380.0),
             100.0,
             2.0,
         )?;
-        graphics::present(ctx);
+        graphics::present(ctx)?;
         Ok(())
     }
 }
 
-pub fn main() {
-    let c = conf::Conf::new();
-    let ctx = &mut Context::load_from_conf("super_simple", "ggez", c).unwrap();
-    let state = &mut MainState::new(ctx).unwrap();
-    event::run(ctx, state).unwrap();
+pub fn main() -> GameResult {
+
+    let cb = ggez::ContextBuilder::new("shader", "ggez");
+    let (ctx, event_loop) = &mut cb.build()?;
+    let state = &mut MainState::new(ctx)?;
+    event::run(ctx, event_loop, state)
 }

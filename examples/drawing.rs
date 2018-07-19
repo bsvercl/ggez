@@ -1,11 +1,12 @@
 //! A collection of semi-random shape and image drawing examples.
 
+extern crate cgmath;
 extern crate ggez;
 
-use ggez::conf;
 use ggez::event;
 use ggez::graphics;
-use ggez::graphics::{DrawMode, Point2};
+use ggez::graphics::{DrawMode, DrawParam};
+use ggez::nalgebra::Point2;
 use ggez::timer;
 use ggez::{Context, GameResult};
 use std::env;
@@ -56,7 +57,7 @@ fn build_mesh(ctx: &mut Context) -> GameResult<graphics::Mesh> {
 }
 
 impl event::EventHandler for MainState {
-    fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
+    fn update(&mut self, ctx: &mut Context) -> GameResult {
         const DESIRED_FPS: u32 = 60;
 
         while timer::check_update_time(ctx, DESIRED_FPS) {
@@ -65,78 +66,80 @@ impl event::EventHandler for MainState {
         Ok(())
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-        graphics::clear(ctx);
-        graphics::set_color(ctx, graphics::WHITE)?;
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
         // let src = graphics::Rect::new(0.25, 0.25, 0.5, 0.5);
         // let src = graphics::Rect::one();
-        let dst = graphics::Point2::new(20.0, 20.0);
-        graphics::draw(ctx, &self.image1, dst, 0.0)?;
-        let dst = graphics::Point2::new(200.0, 100.0);
-        let dst2 = graphics::Point2::new(400.0, 400.0);
-        let scale = graphics::Point2::new(10.0, 10.0);
+        let dst = cgmath::Point2::new(20.0, 20.0);
+        graphics::draw(ctx, &self.image1, (dst,))?;
+        /*
+        let dst = cgmath::Point2::new(200.0, 100.0);
+        let dst2 = cgmath::Point2::new(400.0, 400.0);
+        let scale = cgmath::Vector2::new(10.0, 10.0);
         // let shear = graphics::Point::new(self.zoomlevel, self.zoomlevel);
         // graphics::set_color(ctx, graphics::Color::new(1.0, 1.0, 1.0, 1.0));
-        graphics::draw_ex(
+        graphics::draw(
             ctx,
             &self.image2_linear,
-            graphics::DrawParam {
+            graphics::DrawParam::new()
                 // src: src,
-                dest: dst,
-                rotation: self.zoomlevel,
+                .dest(dst)
+                .rotation(self.zoomlevel)
                 // offset: Point2::new(-16.0, 0.0),
-                scale,
+                .scale(scale)
                 // shear: shear,
-                ..Default::default()
-            },
         )?;
-        graphics::draw_ex(
+        graphics::draw(
             ctx,
             &self.image2_nearest,
-            graphics::DrawParam {
+            graphics::DrawParam::new()
                 // src: src,
-                dest: dst2,
-                rotation: self.zoomlevel,
-                offset: Point2::new(0.5, 0.5),
-                scale,
+                .dest(dst2)
+                .rotation(self.zoomlevel)
+                .offset(Point2::new(0.5, 0.5))
+                .scale(scale)
                 // shear: shear,
-                ..Default::default()
-            },
         )?;
 
         let rect = graphics::Rect::new(450.0, 450.0, 50.0, 50.0);
-        graphics::rectangle(ctx, graphics::DrawMode::Fill, rect)?;
+        graphics::rectangle(ctx, graphics::WHITE, graphics::DrawMode::Fill, rect)?;
 
-        graphics::set_color(ctx, graphics::Color::new(1.0, 0.0, 0.0, 1.0))?;
         let rect = graphics::Rect::new(450.0, 450.0, 50.0, 50.0);
-        graphics::rectangle(ctx, graphics::DrawMode::Line(1.0), rect)?;
+        graphics::rectangle(
+            ctx,
+            graphics::Color::new(1.0, 0.0, 0.0, 1.0),
+            graphics::DrawMode::Line(1.0),
+            rect,
+        )?;
 
         let mesh = build_mesh(ctx)?;
-        graphics::set_color(ctx, (0, 0, 255).into())?;
-        graphics::draw_ex(ctx, &mesh, Default::default())?;
+        graphics::draw(
+            ctx,
+            &mesh,
+            DrawParam::new().color((0, 0, 255)),
+        )?;
+        */
 
-        graphics::present(ctx);
+        graphics::present(ctx)?;
         Ok(())
     }
 }
 
-pub fn main() {
-    let c = conf::Conf::new();
-    let ctx = &mut Context::load_from_conf("drawing", "ggez", c).unwrap();
-
-    // We add the CARGO_MANIFEST_DIR/resources do the filesystems paths so
-    // we we look in the cargo project for files.
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+pub fn main() -> GameResult {
+    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let mut path = path::PathBuf::from(manifest_dir);
         path.push("resources");
-        ctx.filesystem.mount(&path, true);
-    }
-
-    println!("{}", graphics::get_renderer_info(ctx).unwrap());
-    let state = &mut MainState::new(ctx).unwrap();
-    if let Err(e) = event::run(ctx, state) {
-        println!("Error encountered: {}", e);
+        path
     } else {
-        println!("Game exited cleanly.");
-    }
+        path::PathBuf::from("./resources")
+    };
+
+    let cb = ggez::ContextBuilder::new("drawing", "ggez")
+        .add_resource_path(resource_dir);
+
+    let (ctx, events_loop) = &mut cb.build()?;
+
+    println!("{}", graphics::get_renderer_info(ctx)?);
+    let state = &mut MainState::new(ctx).unwrap();
+    event::run(ctx, events_loop, state)
 }
