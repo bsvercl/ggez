@@ -102,26 +102,6 @@ impl From<String> for TextFragment {
     }
 }
 
-<<<<<<< HEAD
-    /// Returns the width a line of text needs, in pixels.
-    /// Does not handle line-breaks.
-    pub fn get_width(&self, text: &str) -> usize {
-        match *self {
-            Font::BitmapFontVariant(ref font) => {
-                compute_variable_bitmap_text_rendering_span(text, font)
-            }
-            Font::TTFFont {
-                ref font, scale, ..
-            } => {
-                let v_metrics = font.v_metrics(scale);
-                let offset = rusttype::point(0.0, v_metrics.ascent);
-                let glyphs: Vec<rusttype::PositionedGlyph> =
-                    font.layout(text, scale, offset).collect();
-                text_width(&glyphs).ceil() as usize
-            }
-            Font::GlyphFont(_) => 0,
-        }
-=======
 // TODO: Scale ergonomics need to be better
 impl<T> From<(T, Font, f32)> for TextFragment
 where
@@ -129,10 +109,8 @@ where
 {
     fn from((text, font, scale): (T, Font, f32)) -> TextFragment {
         text.into().font(font).scale(Scale::uniform(scale))
->>>>>>> upstream/devel
     }
 }
-
 
 /// Cached font metrics that we can keep attached to a `Text`
 /// so we don't have to keep recalculating them.
@@ -271,7 +249,7 @@ impl Text {
                     None => WHITE,
                 },
             };
-            let font_id = match fragment.font{
+            let font_id = match fragment.font {
                 Some(font) => font.font_id,
                 None => self.font_id,
             };
@@ -346,7 +324,8 @@ impl Text {
         let mut max_height = 0;
         {
             let varied_section = self.generate_varied_section(Point2::new(0.0, 0.0), None);
-            let glyphed_section_texts = self.layout
+            let glyphed_section_texts = self
+                .layout
                 .calculate_glyphs(context.gfx_context.glyph_brush.fonts(), &varied_section);
             for glyphed_section_text in &glyphed_section_texts {
                 let (ref positioned_glyph, ..) = glyphed_section_text;
@@ -375,12 +354,11 @@ impl Text {
         if let Ok(metrics) = self.cached_metrics.read() {
             match (metrics.width, metrics.height) {
                 (Some(width), Some(height)) => (width, height),
-                _ => self.calculate_dimensions(context)
+                _ => self.calculate_dimensions(context),
             }
         } else {
             self.calculate_dimensions(context)
         }
-
     }
 
     /// Returns the width of formatted and wrapped text, in screen coordinates.
@@ -442,9 +420,7 @@ impl Font {
         let v = bytes.to_vec();
         let font_id = context.gfx_context.glyph_brush.add_font_bytes(v);
 
-        Ok(Font {
-            font_id: font_id,
-        })
+        Ok(Font { font_id: font_id })
     }
 
     /// Returns the baked-in bytes of default font (currently `DejaVuSerif.ttf`).
@@ -458,9 +434,7 @@ impl Font {
 
 impl Default for Font {
     fn default() -> Self {
-        Font {
-            font_id: FontId(0)
-        }
+        Font { font_id: FontId(0) }
     }
 }
 
