@@ -93,7 +93,8 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
-        let _ = cb.execute(gfx.queue.clone())
+        let _ = cb
+            .execute(gfx.queue.clone())
             .unwrap()
             .then_signal_fence_and_flush()
             .unwrap()

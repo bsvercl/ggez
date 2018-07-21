@@ -354,7 +354,8 @@ pub fn push_transform(context: &mut Context, transform: Option<Matrix4>) {
     if let Some(t) = transform {
         gfx.push_transform(t);
     } else {
-        let copy = *gfx.modelview_stack
+        let copy = *gfx
+            .modelview_stack
             .last()
             .expect("Matrix stack empty, should never happen");
         gfx.push_transform(copy);

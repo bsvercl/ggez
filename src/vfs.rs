@@ -29,11 +29,7 @@ fn convenient_path_to_str(path: &path::Path) -> GameResult<&str> {
 
 pub trait VFile: Read + Write + Seek + Debug {}
 
-impl<T> VFile for T
-where
-    T: Read + Write + Seek + Debug,
-{
-}
+impl<T> VFile for T where T: Read + Write + Seek + Debug {}
 
 /// Options for opening files
 ///
@@ -86,7 +82,8 @@ impl OpenOptions {
 
     fn to_fs_openoptions(&self) -> fs::OpenOptions {
         let mut opt = fs::OpenOptions::new();
-        let _ = opt.read(self.read)
+        let _ = opt
+            .read(self.read)
             .write(self.write)
             .create(self.create)
             .append(self.append)
@@ -735,7 +732,8 @@ impl VFS for ZipFS {
     /// just looking for a path prefix for now.
     fn read_dir(&self, path: &Path) -> GameResult<Box<dyn Iterator<Item = GameResult<PathBuf>>>> {
         let path = convenient_path_to_str(path)?;
-        let itr = self.index
+        let itr = self
+            .index
             .iter()
             .filter(|s| s.starts_with(path))
             .map(|s| Ok(PathBuf::from(s)))

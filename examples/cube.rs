@@ -265,8 +265,7 @@ pub fn main() -> GameResult {
         path::PathBuf::from("./resources")
     };
 
-    let cb = ggez::ContextBuilder::new("cube", "ggez")
-        .add_resource_path(resource_dir);
+    let cb = ggez::ContextBuilder::new("cube", "ggez").add_resource_path(resource_dir);
 
     let (ctx, events_loop) = &mut cb.build()?;
     let state = &mut MainState::new(ctx);

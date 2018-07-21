@@ -94,7 +94,8 @@ impl graphics::Drawable for SpriteBatch {
         let gfx = &mut ctx.gfx_context;
         use rayon::prelude::*;
         // TODO: This doesn't have to happen every frame
-        let params = self.sprites
+        let params = self
+            .sprites
             .par_iter()
             .map(|param| {
                 // Copy old params
