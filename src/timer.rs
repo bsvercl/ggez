@@ -136,8 +136,7 @@ pub fn get_delta(ctx: &Context) -> time::Duration {
 pub fn get_average_delta(ctx: &Context) -> time::Duration {
     let tc = &ctx.timer_context;
     let init = time::Duration::new(0, 0);
-    let sum = tc
-        .frame_durations
+    let sum = tc.frame_durations
         .contents()
         .iter()
         .fold(init, |d1, d2| d1 + *d2);

@@ -123,13 +123,11 @@ impl GraphicsContext {
         let dimensions;
         let (swapchain, swapchain_images) = {
             let caps = surface.capabilities(physical_device).unwrap();
-            dimensions = caps
-                .current_extent
+            dimensions = caps.current_extent
                 .unwrap_or([window_mode.width as u32, window_mode.height as u32]);
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
             // TODO: Srgb?
-            let format = caps
-                .supported_formats
+            let format = caps.supported_formats
                 .iter()
                 .max_by_key(|format| match format {
                     (Format::R8G8B8A8Srgb, _) => 2,
@@ -316,8 +314,7 @@ impl GraphicsContext {
     }
 
     pub(crate) fn calculate_transform_matrix(&mut self) {
-        let modelview = self
-            .modelview_stack
+        let modelview = self.modelview_stack
             .last()
             .expect("Transform stack empty; should never happen");
         self.mvp = self.projection * modelview;
@@ -338,8 +335,7 @@ impl GraphicsContext {
             !self.modelview_stack.is_empty(),
             "Tried to set a transform on an empty transform stack!"
         );
-        let last = self
-            .modelview_stack
+        let last = self.modelview_stack
             .last_mut()
             .expect("Transform stack empty; should never happen");
         *last = t;
@@ -350,8 +346,7 @@ impl GraphicsContext {
             !self.modelview_stack.is_empty(),
             "Tried to get a transform on an empty transform stack!"
         );
-        let last = self
-            .modelview_stack
+        let last = self.modelview_stack
             .last()
             .expect("Transform stack empty; should never happen!");
         *last
@@ -447,8 +442,7 @@ impl GraphicsContext {
         sampler: Option<Arc<Sampler>>,
     ) {
         let descriptor = {
-            let uniform_buffer = self
-                .uniform_buffer_pool
+            let uniform_buffer = self.uniform_buffer_pool
                 .next(vs::ty::Globals {
                     mvp: self.mvp.into(),
                 })
@@ -527,8 +521,7 @@ impl GraphicsContext {
         if self.recreate_swapchain {
             let physical_device = self.device.physical_device();
 
-            self.dimensions = self
-                .surface
+            self.dimensions = self.surface
                 .capabilities(physical_device)
                 .unwrap()
                 .current_extent
@@ -598,8 +591,7 @@ impl GraphicsContext {
         }
         let command_buffer = command_buffer.end_render_pass().unwrap().build().unwrap();
 
-        let previous = self
-            .previous_frame_end
+        let previous = self.previous_frame_end
             .take()
             .unwrap_or_else(|| Box::new(sync::now(self.device.clone())));
 
