@@ -123,11 +123,13 @@ impl GraphicsContext {
         let dimensions;
         let (swapchain, swapchain_images) = {
             let caps = surface.capabilities(physical_device).unwrap();
-            dimensions = caps.current_extent
+            dimensions = caps
+                .current_extent
                 .unwrap_or([window_mode.width as u32, window_mode.height as u32]);
             let alpha = caps.supported_composite_alpha.iter().next().unwrap();
             // TODO: Srgb?
-            let format = caps.supported_formats
+            let format = caps
+                .supported_formats
                 .iter()
                 .max_by_key(|format| match format {
                     (Format::R8G8B8A8Srgb, _) => 2,
@@ -314,7 +316,8 @@ impl GraphicsContext {
     }
 
     pub(crate) fn calculate_transform_matrix(&mut self) {
-        let modelview = self.modelview_stack
+        let modelview = self
+            .modelview_stack
             .last()
             .expect("Transform stack empty; should never happen");
         self.mvp = self.projection * modelview;
@@ -335,18 +338,21 @@ impl GraphicsContext {
             !self.modelview_stack.is_empty(),
             "Tried to set a transform on an empty transform stack!"
         );
-        let last = self.modelview_stack
+        let last = self
+            .modelview_stack
             .last_mut()
             .expect("Transform stack empty; should never happen");
         *last = t;
     }
 
-    pub(crate) fn get_transform(&self) -> Matrix4 {
+    /// Gets a copy of the current transform matrix.
+    pub(crate) fn transform(&self) -> Matrix4 {
         assert!(
             !self.modelview_stack.is_empty(),
             "Tried to get a transform on an empty transform stack!"
         );
-        let last = self.modelview_stack
+        let last = self
+            .modelview_stack
             .last()
             .expect("Transform stack empty; should never happen!");
         *last
@@ -357,16 +363,63 @@ impl GraphicsContext {
     }
 
     pub(crate) fn set_projection_rect(&mut self, rect: Rect) {
+        /// Creates an orthographic projection matrix.
+        /// Because nalgebra gets frumple when you try to make
+        /// one that is upside-down.
+        fn ortho(
+            left: f32,
+            right: f32,
+            top: f32,
+            bottom: f32,
+            far: f32,
+            near: f32,
+        ) -> [[f32; 4]; 4] {
+            let c0r0 = 2.0 / (right - left);
+            let c0r1 = 0.0;
+            let c0r2 = 0.0;
+            let c0r3 = 0.0;
+
+            let c1r0 = 0.0;
+            let c1r1 = 2.0 / (top - bottom);
+            let c1r2 = 0.0;
+            let c1r3 = 0.0;
+
+            let c2r0 = 0.0;
+            let c2r1 = 0.0;
+            let c2r2 = -2.0 / (far - near);
+            let c2r3 = 0.0;
+
+            let c3r0 = -(right + left) / (right - left);
+            let c3r1 = -(top + bottom) / (top - bottom);
+            let c3r2 = -(far + near) / (far - near);
+            let c3r3 = 1.0;
+
+            // our matrices are column-major, so here we are.
+            [
+                [c0r0, c0r1, c0r2, c0r3],
+                [c1r0, c1r1, c1r2, c1r3],
+                [c2r0, c2r1, c2r2, c2r3],
+                [c3r0, c3r1, c3r2, c3r3],
+            ]
+        }
+
         self.screen_rect = rect;
-        self.projection =
-            Matrix4::new_orthographic(rect.x, rect.x + rect.w, rect.y, rect.y + rect.h, -1.0, 1.0);
+        self.projection = Matrix4::from(ortho(
+            rect.x,
+            rect.x + rect.w,
+            rect.y,
+            rect.y + rect.h,
+            -1.0,
+            1.0,
+        ));
     }
 
     pub(crate) fn set_projection(&mut self, t: Matrix4) {
         self.projection = t;
     }
 
-    pub(crate) fn get_projection(&self) -> Matrix4 {
+    /// Gets a copy of the raw projection matrix.
+    pub(crate) fn projection(&self) -> Matrix4 {
         self.projection
     }
 
@@ -384,22 +437,25 @@ impl GraphicsContext {
             1.0
         };
 
-        let mut min_dimensions = None;
-        if mode.min_width > 0.0 && mode.min_height > 0.0 {
-            min_dimensions = Some(dpi::LogicalSize {
+        // TODO: find out if single-dimension constraints are possible.
+        let min_dimensions = if mode.min_width > 0.0 && mode.min_height > 0.0 {
+            Some(dpi::LogicalSize {
                 width: mode.min_width.into(),
                 height: mode.min_height.into(),
-            });
-        }
+            })
+        } else {
+            None
+        };
         window.set_min_dimensions(min_dimensions);
 
-        let mut max_dimensions = None;
-        if mode.max_width > 0.0 && mode.max_height > 0.0 {
-            max_dimensions = Some(dpi::LogicalSize {
+        let max_dimensions = if mode.max_width > 0.0 && mode.max_height > 0.0 {
+            Some(dpi::LogicalSize {
                 width: mode.max_width.into(),
                 height: mode.max_height.into(),
-            });
-        }
+            })
+        } else {
+            None
+        };
         window.set_max_dimensions(max_dimensions);
 
         let monitor = window.get_current_monitor();
@@ -422,11 +478,12 @@ impl GraphicsContext {
             FullscreenType::Desktop => {
                 let position = monitor.get_position();
                 let dimensions = monitor.get_dimensions();
+                let hidpi_factor = window.get_hidpi_factor();
+                self.hidpi_factor = hidpi_factor as f32;
                 window.set_fullscreen(None);
                 window.set_decorations(false);
-                // BUGGO: Need to find and store dpi_size
-                window.set_inner_size(dimensions.to_logical(1.0));
-                window.set_position(position.to_logical(1.0));
+                window.set_inner_size(dimensions.to_logical(hidpi_factor));
+                window.set_position(position.to_logical(hidpi_factor));
             }
         }
 
@@ -442,7 +499,8 @@ impl GraphicsContext {
         sampler: Option<Arc<Sampler>>,
     ) {
         let descriptor = {
-            let uniform_buffer = self.uniform_buffer_pool
+            let uniform_buffer = self
+                .uniform_buffer_pool
                 .next(vs::ty::Globals {
                     mvp: self.mvp.into(),
                 })
@@ -521,7 +579,8 @@ impl GraphicsContext {
         if self.recreate_swapchain {
             let physical_device = self.device.physical_device();
 
-            self.dimensions = self.surface
+            self.dimensions = self
+                .surface
                 .capabilities(physical_device)
                 .unwrap()
                 .current_extent
@@ -591,7 +650,8 @@ impl GraphicsContext {
         }
         let command_buffer = command_buffer.end_render_pass().unwrap().build().unwrap();
 
-        let previous = self.previous_frame_end
+        let previous = self
+            .previous_frame_end
             .take()
             .unwrap_or_else(|| Box::new(sync::now(self.device.clone())));
 
@@ -633,7 +693,7 @@ impl GraphicsContext {
     /// and turns it into the equivalent in PhysicalScale, allowing us to
     /// override the DPI if necessary.
     pub(crate) fn to_physical_dpi(&self, x: f32, y: f32) -> (f32, f32) {
-        let logical = dpi::LogicalPosition::new(x as f64, y as f64);
+        let logical = dpi::LogicalPosition::new(f64::from(x), f64::from(y));
         let physical = dpi::PhysicalPosition::from_logical(logical, self.hidpi_factor.into());
         (physical.x as f32, physical.y as f32)
     }

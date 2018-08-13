@@ -247,8 +247,8 @@ impl Filesystem {
         Ok(Box::new(itr))
     }
 
-    /// Prints the contents of all data directories.
-    /// Useful for debugging.
+    /// Prints the contents of all data directories
+    /// to standard output.  Useful for debugging.
     pub(crate) fn print_all(&mut self) {
         for vfs in self.vfs.roots() {
             println!("Source {:?}", vfs);
@@ -261,11 +261,13 @@ impl Filesystem {
         }
     }
 
+    // TODO: The code duplication here irks me.
+    // print_all() and log_all() should be combinable.
     /// Outputs the contents of all data directories,
     /// using the "info" log level of the `log` crate.
     /// Useful for debugging.
     ///
-    /// See the `logging` example for how to collect
+    /// See the `logging` example for info on how to collect
     /// log information.
     pub(crate) fn log_all(&mut self) {
         for vfs in self.vfs.roots() {
@@ -410,9 +412,6 @@ pub fn read_dir<P: AsRef<path::Path>>(
 
 /// Prints the contents of all data directories.
 /// Useful for debugging.
-///
-/// TODO: Should be closer to log_all()...
-/// I feel like they should share a common path.
 pub fn print_all(ctx: &mut Context) {
     ctx.filesystem.print_all()
 }
@@ -459,7 +458,7 @@ mod tests {
     use std::io::{Read, Write};
     use std::path;
 
-    fn get_dummy_fs_for_tests() -> Filesystem {
+    fn dummy_fs_for_tests() -> Filesystem {
         let mut path = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("resources");
         let physfs = vfs::PhysicalFS::new(&path, false);
@@ -477,7 +476,7 @@ mod tests {
 
     #[test]
     fn headless_test_file_exists() {
-        let f = get_dummy_fs_for_tests();
+        let f = dummy_fs_for_tests();
 
         let tile_file = path::Path::new("/tile.png");
         assert!(f.exists(tile_file));
@@ -491,7 +490,7 @@ mod tests {
 
     #[test]
     fn headless_test_read_dir() {
-        let mut f = get_dummy_fs_for_tests();
+        let mut f = dummy_fs_for_tests();
 
         let dir_contents_size = f.read_dir("/").unwrap().count();
         assert!(dir_contents_size > 0);
@@ -499,7 +498,7 @@ mod tests {
 
     #[test]
     fn headless_test_create_delete_file() {
-        let mut fs = get_dummy_fs_for_tests();
+        let mut fs = dummy_fs_for_tests();
         let test_file = path::Path::new("/testfile.txt");
         let bytes = "test".as_bytes();
 
@@ -519,7 +518,7 @@ mod tests {
 
     #[test]
     fn headless_test_file_not_found() {
-        let mut fs = get_dummy_fs_for_tests();
+        let mut fs = dummy_fs_for_tests();
         {
             let rel_file = "testfile.txt";
             match fs.open(rel_file) {
@@ -542,7 +541,7 @@ mod tests {
 
     #[test]
     fn headless_test_write_config() {
-        let mut f = get_dummy_fs_for_tests();
+        let mut f = dummy_fs_for_tests();
         let conf = conf::Conf::new();
         // The config file should end up in
         // the resources directory with this

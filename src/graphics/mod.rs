@@ -42,14 +42,115 @@ pub use self::mesh::*;
 // pub use self::text::*;
 pub use self::types::*;
 
+<<<<<<< HEAD
 /// Internal structure containing vertex data.
 #[derive(Copy, Clone, Debug)]
 pub struct Vertex {
     position: [f32; 2],
     texcoord: [f32; 2],
+=======
+type BuggoSurfaceFormat = gfx::format::Srgba8;
+type ShaderResourceType = [f32; 4];
+
+/// A marker trait saying that something is a label for a particular backend,
+/// with associated gfx-rs types for that backend.
+pub trait BackendSpec: fmt::Debug {
+    /// gfx resource type
+    type Resources: gfx::Resources;
+    /// gfx factory type
+    type Factory: gfx::Factory<Self::Resources> + Clone;
+    /// gfx command buffer type
+    type CommandBuffer: gfx::CommandBuffer<Self::Resources>;
+    /// gfx device type
+    type Device: gfx::Device<Resources = Self::Resources, CommandBuffer = Self::CommandBuffer>;
+
+    /// A helper function to take a RawShaderResourceView and turn it into a typed one based on
+    /// the surface type defined in a `BackendSpec`.
+    ///
+    /// But right now we only allow surfaces that use [f32;4] colors, so we can freely
+    /// hardcode this in the `ShaderResourceType` type.
+    fn raw_to_typed_shader_resource(
+        &self,
+        texture_view: gfx::handle::RawShaderResourceView<Self::Resources>,
+    ) -> gfx::handle::ShaderResourceView<<Self as BackendSpec>::Resources, ShaderResourceType> {
+        let typed_view: gfx::handle::ShaderResourceView<_, ShaderResourceType> =
+            gfx::memory::Typed::new(texture_view);
+        typed_view
+    }
+
+    /// Returns the version of the backend, `(major, minor)`.
+    ///
+    /// So for instance if the backend is using OpenGL version 3.2,
+    /// it would return `(3, 2)`.
+    fn version_tuple(&self) -> (u8, u8);
+
+    /// Returns a string containing some backend-dependent info.
+    fn info(&self, device: &Self::Device) -> String;
+
+    /// Creates the window.
+    fn init<'a>(
+        &self,
+        window_builder: glutin::WindowBuilder,
+        gl_builder: glutin::ContextBuilder<'a>,
+        events_loop: &glutin::EventsLoop,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+    ) -> (
+        glutin::GlWindow,
+        Self::Device,
+        Self::Factory,
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    );
+
+    /// Create an Encoder for the backend.
+    fn encoder(
+        factory: &mut Self::Factory,
+    ) -> gfx::Encoder<Self::Resources, Self::CommandBuffer>;
+
+    /// Resizes the viewport for the backend. (right now assumes a Glutin window...)
+    fn resize_viewport(
+        &self,
+        color_view: &gfx::handle::RawRenderTargetView<Self::Resources>,
+        depth_view: &gfx::handle::RawDepthStencilView<Self::Resources>,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+        window: &glutin::GlWindow,
+    ) -> Option<(
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    )>;
+}
+
+/// A backend specification for OpenGL.
+/// This is different from `conf::Backend` because
+/// this needs to be its own struct to implement traits upon,
+/// and because there may need to be a layer of translation
+/// between what the user specifies in the config, and what the
+/// graphics backend init code actually gets.
+///
+/// You shouldn't normally need to fiddle with this directly
+/// but it has to be exported cause generic types like
+/// `Shader` depend on it.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SmartDefault, Hash)]
+pub struct GlBackendSpec {
+    #[default = r#"3"#]
+    major: u8,
+    #[default = r#"2"#]
+    minor: u8,
+}
+
+impl From<conf::Backend> for GlBackendSpec {
+    fn from(c: conf::Backend) -> Self {
+        match c {
+            conf::Backend::OpenGL { major, minor } => Self { major, minor },
+        }
+    }
+>>>>>>> upstream/devel
 }
 impl_vertex!(Vertex, position, texcoord);
 
+<<<<<<< HEAD
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct InstanceProperties {
     src: [f32; 4],
@@ -67,6 +168,60 @@ pub(crate) mod vs {
     #[path = "src/graphics/shader/basic_450.glslv"]
     struct Dummy;
 }
+=======
+impl BackendSpec for GlBackendSpec {
+    type Resources = gfx_device_gl::Resources;
+    type Factory = gfx_device_gl::Factory;
+    type CommandBuffer = gfx_device_gl::CommandBuffer;
+    type Device = gfx_device_gl::Device;
+
+    fn version_tuple(&self) -> (u8, u8) {
+        (self.major, self.minor)
+    }
+
+    fn init<'a>(
+        &self,
+        window_builder: glutin::WindowBuilder,
+        gl_builder: glutin::ContextBuilder<'a>,
+        events_loop: &glutin::EventsLoop,
+        color_format: gfx::format::Format,
+        depth_format: gfx::format::Format,
+    ) -> (
+        glutin::GlWindow,
+        Self::Device,
+        Self::Factory,
+        gfx::handle::RawRenderTargetView<Self::Resources>,
+        gfx::handle::RawDepthStencilView<Self::Resources>,
+    ) {
+        use gfx_window_glutin;
+        let (window, device, factory, screen_render_target, depth_view) =
+            gfx_window_glutin::init_raw(
+                window_builder,
+                gl_builder,
+                events_loop,
+                color_format,
+                depth_format,
+            );
+        (window, device, factory, screen_render_target, depth_view)
+    }
+
+    fn info(&self, device: &Self::Device) -> String {
+        let info = device.get_info();
+        format!(
+            "Driver vendor: {}, renderer {}, version {:?}, shading language {:?}",
+            info.platform_name.vendor,
+            info.platform_name.renderer,
+            info.version,
+            info.shading_language
+        )
+    }
+
+    fn encoder(
+        factory: &mut Self::Factory,
+    ) -> gfx::Encoder<Self::Resources, Self::CommandBuffer> {
+        factory.create_command_buffer().into()
+    }
+>>>>>>> upstream/devel
 
 pub(crate) mod fs {
     #[derive(VulkanoShader)]
@@ -104,7 +259,22 @@ const QUAD_INDICES: [u16; 6] = [0, 1, 2, 0, 2, 3];
 /// TODO: Into<Color> ?
 pub fn clear(ctx: &mut Context, color: Color) {
     let gfx = &mut ctx.gfx_context;
+<<<<<<< HEAD
     gfx.clear_color = color.into();
+=======
+    // SRGB BUGGO: Only convert when drawing on srgb surface?
+    // I actually can't make it make any difference; fiddle more.
+    let linear_color: types::LinearColor = color.into();
+    // SRGB BUGGO: Need a clear_raw() method here,
+    // which currently isn't released, see
+    // https://github.com/gfx-rs/gfx/pull/2197
+    // So for now we wing it.
+    type ColorFormat = BuggoSurfaceFormat;
+
+    let typed_render_target: gfx::handle::RenderTargetView<_, ColorFormat> =
+        gfx::memory::Typed::new(gfx.data.out.clone());
+    gfx.encoder.clear(&typed_render_target, linear_color.into());
+>>>>>>> upstream/devel
 }
 
 /// Draws the given `Drawable` object to the screen by calling its
@@ -115,7 +285,7 @@ where
     T: Into<DrawTransform>,
 {
     let params = params.into();
-    drawable.draw(ctx, DrawTransform::from(params))
+    drawable.draw(ctx, params)
 }
 
 /// Tells the graphics system to actually put everything on the screen.
@@ -132,21 +302,6 @@ pub fn present(ctx: &mut Context) -> GameResult<()> {
 pub fn screenshot(ctx: &mut Context) -> GameResult<Image> {
     unimplemented!()
 }
-
-/* // TODO: consider implementing.
-// Draw an arc.
-// Punting on this until later.
-pub fn arc(_ctx: &mut Context,
-           _mode: DrawMode,
-           _point: Point,
-           _radius: f32,
-           _angle1: f32,
-           _angle2: f32,
-           _segments: u32)
-           -> GameResult {
-    unimplemented!();
-}
-*/
 
 // TODO: Make all of these take Into<Color>???
 
@@ -233,19 +388,6 @@ where
     m.draw(ctx, DrawParam::new().color(color))
 }
 
-// TODO: consider removing - it's commented out on devel.
-// Renders text with the default font.
-// Not terribly efficient as it re-renders the text with each call,
-// but good enough for debugging.
-// Doesn't actually work, double-borrow on ctx.  Bah.
-// pub fn print(ctx: &mut Context, dest: Point, text: &str) -> GameResult {
-//     let rendered_text = {
-//         let font = &ctx.default_font;
-//         text::Text::new(ctx, text, font)?
-//     };
-//     draw(ctx, &rendered_text, dest, 0.0)
-// }
-
 /// Draws a rectangle.
 ///
 /// Allocates a new `Mesh`, draws it, and throws it away, so if you are drawing many of them
@@ -277,7 +419,16 @@ pub fn get_default_filter(ctx: &Context) -> FilterMode {
 /// It is supposed to be human-readable and will change; do not try to parse
 /// information out of it!
 pub fn get_renderer_info(ctx: &Context) -> GameResult<String> {
+<<<<<<< HEAD
     Ok(String::from(""))
+=======
+    let backend_info = ctx.gfx_context.backend_spec.info(&*ctx.gfx_context.device);
+    Ok(format!(
+        "Requested OpenGL {}.{} Core profile, actually got {}.",
+        ctx.gfx_context.backend_spec.major, ctx.gfx_context.backend_spec.minor,
+        backend_info
+    ))
+>>>>>>> upstream/devel
 }
 
 /// Returns a rectangle defining the coordinate system of the screen.
@@ -328,16 +479,16 @@ pub fn set_projection(context: &mut Context, proj: Matrix4) {
 ///
 /// You must call `apply_transformations(ctx)` after calling this to apply
 /// these changes and recalculate the underlying MVP matrix.
-pub fn transform_projection(context: &mut Context, transform: Matrix4) {
+pub fn mul_projection(context: &mut Context, transform: Matrix4) {
     let gfx = &mut context.gfx_context;
-    let curr = gfx.get_projection();
+    let curr = gfx.projection();
     gfx.set_projection(transform * curr);
 }
 
 /// Gets a copy of the context's raw projection matrix
 pub fn get_projection(context: &Context) -> Matrix4 {
     let gfx = &context.gfx_context;
-    gfx.get_projection()
+    gfx.projection()
 }
 
 /// Pushes a homogeneous transform matrix to the top of the transform
@@ -387,7 +538,7 @@ pub fn set_transform(context: &mut Context, transform: Matrix4) {
 /// Gets a copy of the context's current transform matrix
 pub fn get_transform(context: &Context) -> Matrix4 {
     let gfx = &context.gfx_context;
-    gfx.get_transform()
+    gfx.transform()
 }
 
 /// Premultiplies the given transform with the current model transform.
@@ -397,9 +548,9 @@ pub fn get_transform(context: &Context) -> Matrix4 {
 ///
 /// A `DrawParam` can be converted into an appropriate transform
 /// matrix by calling `param.into_matrix()`.
-pub fn transform(context: &mut Context, transform: Matrix4) {
+pub fn mul_transform(context: &mut Context, transform: Matrix4) {
     let gfx = &mut context.gfx_context;
-    let curr = gfx.get_transform();
+    let curr = gfx.transform();
     gfx.set_transform(transform * curr);
 }
 
@@ -532,6 +683,18 @@ pub trait Drawable {
     fn draw<D>(&self, ctx: &mut Context, param: D) -> GameResult
     where
         D: Into<DrawTransform>;
+<<<<<<< HEAD
+=======
+
+    /// Sets the blend mode to be used when drawing this drawable.
+    /// This overrides the general `graphics::set_blend_mode()`.
+    /// If `None` is set, defers to the blend mode set by
+    /// `graphics::set_blend_mode()`.
+    fn set_blend_mode(&mut self, mode: Option<BlendMode>);
+
+    /// Gets the blend mode to be used when drawing this drawable.
+    fn blend_mode(&self) -> Option<BlendMode>;
+>>>>>>> upstream/devel
 }
 
 #[cfg(test)]

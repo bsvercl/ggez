@@ -58,7 +58,7 @@ impl fmt::Debug for Context {
 
 impl Context {
     /// Tries to create a new Context using settings from the given config file.
-    /// Usually called by `Context::load_from_conf()`.
+    /// Usually called by `ContextBuilder::build()`.
     fn from_conf(conf: conf::Conf, fs: Filesystem) -> GameResult<(Context, winit::EventsLoop)> {
         let debug_id = DebugId::new();
         let audio_context = audio::AudioContext::new()?;
@@ -89,37 +89,6 @@ impl Context {
         };
 
         Ok((ctx, events_loop))
-    }
-
-    /// Tries to create a new Context by loading a config
-    /// file from its default path, using the given `Conf`
-    /// object as a default if none is found.
-    ///
-    /// The `game_id` and `author` are game-specific strings that
-    /// are used to locate the default storage locations for the
-    /// platform it looks in, as documented in the `filesystem`
-    /// module.  You can also always debug-print the
-    /// `Context::filesystem` field to see what paths it is
-    /// searching.
-    pub fn load_from_conf(
-        game_id: &'static str,
-        author: &'static str,
-        default_config: conf::Conf,
-    ) -> GameResult<(Context, winit::EventsLoop)> {
-        let mut fs = Filesystem::new(game_id, author)?;
-
-        let config = match fs.read_config() {
-            Ok(config) => {
-                info!("Loading conf.toml");
-                config
-            }
-            Err(e) => {
-                info!("Could not load conf.toml, using default: {:?}", e);
-                default_config
-            }
-        };
-
-        Context::from_conf(config, fs)
     }
 
     /// Terminates `ggez::run()` loop by setting `Context::continuing` to `false`.
@@ -188,11 +157,13 @@ impl Context {
 
 use std::path;
 
-/// A builder object for creating a context.
+/// A builder object for creating a `Context`.
 ///
 /// Can do everything the `Context::load_from_conf()` method does, plus you can
 /// also specify new paths to add to the resource path list at build time instead
 /// of using `filesystem::mount()`.
+///
+/// TODO: Better docs.  Should `Context::load_from_conf` be outright deprecated?
 #[derive(Debug)]
 pub struct ContextBuilder {
     game_id: &'static str,
@@ -255,15 +226,15 @@ impl ContextBuilder {
     pub fn build(self) -> GameResult<(Context, winit::EventsLoop)> {
         let mut fs = Filesystem::new(self.game_id, self.author)?;
 
+        for path in &self.paths {
+            fs.mount(path, true);
+        }
+
         let config = if self.load_conf_file {
             fs.read_config().unwrap_or(self.conf)
         } else {
             self.conf
         };
-
-        for path in &self.paths {
-            fs.mount(path, true);
-        }
 
         Context::from_conf(config, fs)
     }

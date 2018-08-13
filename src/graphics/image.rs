@@ -93,7 +93,8 @@ impl Image {
             .unwrap()
             .build()
             .unwrap();
-        let _ = cb.execute(gfx.queue.clone())
+        let _ = cb
+            .execute(gfx.queue.clone())
             .unwrap()
             .then_signal_fence_and_flush()
             .unwrap()
@@ -226,7 +227,7 @@ impl Image {
     }
 
     /// Get the filter mode for the image.
-    // pub fn get_filter(&self) -> FilterMode {
+    // pub fn filter(&self) -> FilterMode {
     //     self.sampler_info.filter.into()
     // }
 
@@ -236,7 +237,7 @@ impl Image {
     // }
 
     /// Returns the dimensions of the image.
-    pub fn get_dimensions(&self) -> Rect {
+    pub fn dimensions(&self) -> Rect {
         Rect::new(0.0, 0.0, self.width() as f32, self.height() as f32)
     }
 }
@@ -271,8 +272,8 @@ impl Drawable for Image {
         // be its-unit-size-in-pixels.
         use nalgebra;
         let real_scale = nalgebra::Vector3::new(
-            src_width * self.width as f32,
-            src_height * self.height as f32,
+            src_width * f32::from(self.width),
+            src_height * f32::from(self.height),
             1.0,
         );
         let new_param = param * Matrix4::new_nonuniform_scaling(&real_scale);
@@ -286,7 +287,7 @@ impl Drawable for Image {
     //     self.blend_mode = mode;
     // }
 
-    // fn get_blend_mode(&self) -> Option<BlendMode> {
+    // fn blend_mode(&self) -> Option<BlendMode> {
     //     self.blend_mode
     // }
 }
@@ -294,12 +295,12 @@ impl Drawable for Image {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ContextBuilder;
     #[test]
     fn test_invalid_image_size() {
-        // let c = conf::Conf::new();
-        // let (ctx, _) = &mut Context::load_from_conf("unittest", "unittest", c).unwrap();
-        // let _i = assert!(Image::from_rgba8(ctx, 0, 0, &vec![]).is_err());
-        // let _i = assert!(Image::from_rgba8(ctx, 3432, 432, &vec![]).is_err());
-        // let _i = Image::from_rgba8(ctx, 2, 2, &vec![99; 16]).unwrap();
+        let (ctx, _) = &mut ContextBuilder::new("unittest", "unittest").build().unwrap();
+        let _i = assert!(Image::from_rgba8(ctx, 0, 0, &vec![]).is_err());
+        let _i = assert!(Image::from_rgba8(ctx, 3432, 432, &vec![]).is_err());
+        let _i = Image::from_rgba8(ctx, 2, 2, &vec![99; 16]).unwrap();
     }
 }

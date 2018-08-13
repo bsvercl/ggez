@@ -3,9 +3,7 @@
 extern crate cgmath;
 extern crate ggez;
 
-use ggez::conf;
 use ggez::event;
-use ggez::filesystem;
 use ggez::graphics::{self, Color, DrawParam};
 use ggez::{Context, GameResult};
 
@@ -45,8 +43,8 @@ impl event::EventHandler for MainState {
         // right
         let window_size = graphics::get_size(ctx);
         let scale = Vector2::new(
-            0.5 * window_size.0 as f32 / self.canvas.get_image().width() as f32,
-            0.5 * window_size.1 as f32 / self.canvas.get_image().height() as f32,
+            0.5 * window_size.0 as f32 / self.canvas.image().width() as f32,
+            0.5 * window_size.1 as f32 / self.canvas.image().height() as f32,
         );
         // let scale = Vector2::new(1.0, 1.0);
         graphics::set_canvas(ctx, None);

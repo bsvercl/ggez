@@ -68,6 +68,55 @@ impl SpriteBatch {
         }
     }
 
+<<<<<<< HEAD
+=======
+    /// Immediately sends all data in the batch to the graphics card.
+    ///
+    /// Generally just calling `graphics::draw()` on the `SpriteBatch`
+    /// will do this automaticassertally.
+    fn flush(&self, ctx: &mut Context, image: &graphics::Image) -> GameResult {
+        // TODO: Can we clean up now?
+        // This is a little awkward but this is the right place
+        // to do whatever transformations need to happen to DrawParam's.
+        // We have a Context, and *everything* must pass through this
+        // function to be drawn, so.
+        // Though we do awkwardly have to allocate a new vector.
+        let new_sprites = self.sprites
+            .iter()
+            .map(|param| {
+                // Copy old params
+                let mut new_param = *param;
+                let src_width = param.src.w;
+                let src_height = param.src.h;
+                let real_scale = graphics::Vector2::new(
+                    src_width * param.scale.x * f32::from(image.width),
+                    src_height * param.scale.y * f32::from(image.height),
+                );
+                new_param.scale = real_scale;
+                // If we have no color, our color is white.
+                // This is fine because coloring the whole spritebatch is possible
+                // with graphics::set_color(); this just inherits from that.
+                new_param.color = new_param.color;
+                let primitive_param = graphics::DrawTransform::from(new_param);
+                primitive_param.to_instance_properties(ctx.gfx_context.is_srgb())
+            })
+            .collect::<Vec<_>>();
+
+        let gfx = &mut ctx.gfx_context;
+        if gfx.data.rect_instance_properties.len() < self.sprites.len() {
+            gfx.data.rect_instance_properties = gfx.factory.create_buffer(
+                self.sprites.len(),
+                gfx::buffer::Role::Vertex,
+                gfx::memory::Usage::Dynamic,
+                gfx::memory::Bind::TRANSFER_DST,
+            )?;
+        }
+        gfx.encoder
+            .update_buffer(&gfx.data.rect_instance_properties, &new_sprites[..], 0)?;
+        Ok(())
+    }
+
+>>>>>>> upstream/devel
     /// Removes all data from the sprite batch.
     pub fn clear(&mut self) {
         self.sprites.clear();
@@ -83,6 +132,19 @@ impl SpriteBatch {
         use std::mem;
         mem::replace(&mut self.image, image)
     }
+<<<<<<< HEAD
+=======
+
+    /// Get the filter mode for the SpriteBatch.
+    pub fn filter(&self) -> FilterMode {
+        self.image.filter()
+    }
+
+    /// Set the filter mode for the SpriteBatch.
+    pub fn set_filter(&mut self, mode: FilterMode) {
+        self.image.set_filter(mode);
+    }
+>>>>>>> upstream/devel
 }
 
 impl graphics::Drawable for SpriteBatch {
@@ -92,6 +154,7 @@ impl graphics::Drawable for SpriteBatch {
     {
         let param = param.into();
         let gfx = &mut ctx.gfx_context;
+<<<<<<< HEAD
         use rayon::prelude::*;
         // TODO: This doesn't have to happen every frame
         let params = self.sprites
@@ -113,14 +176,53 @@ impl graphics::Drawable for SpriteBatch {
         gfx.push_transform(param.matrix * current_transform);
         gfx.calculate_transform_matrix();
         gfx.draw(&params, None, None, Some(self.image.texture.clone()), None);
+=======
+        let sampler = gfx.samplers
+            .get_or_insert(self.image.sampler_info, gfx.factory.as_mut());
+        gfx.data.vbuf = gfx.quad_vertex_buffer.clone();
+        let typed_thingy = gfx.backend_spec
+            .raw_to_typed_shader_resource(self.image.texture.clone());
+        gfx.data.tex = (typed_thingy, sampler);
+
+        let mut slice = gfx.quad_slice.clone();
+        slice.instances = Some((self.sprites.len() as u32, 0));
+        let curr_transform = gfx.transform();
+        gfx.push_transform(param.matrix * curr_transform);
+        gfx.calculate_transform_matrix();
+        gfx.update_globals()?;
+        let previous_mode: Option<BlendMode> = if let Some(mode) = self.blend_mode {
+            let current_mode = gfx.blend_mode();
+            if current_mode != mode {
+                gfx.set_blend_mode(mode)?;
+                Some(current_mode)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        gfx.draw(Some(&slice))?;
+        if let Some(mode) = previous_mode {
+            gfx.set_blend_mode(mode)?;
+        }
+>>>>>>> upstream/devel
         gfx.pop_transform();
         gfx.calculate_transform_matrix();
         Ok(())
     }
+<<<<<<< HEAD
     // fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
     //     self.blend_mode = mode;
     // }
     // fn get_blend_mode(&self) -> Option<BlendMode> {
     //     self.blend_mode
     // }
+=======
+    fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
+        self.blend_mode = mode;
+    }
+    fn blend_mode(&self) -> Option<BlendMode> {
+        self.blend_mode
+    }
+>>>>>>> upstream/devel
 }
