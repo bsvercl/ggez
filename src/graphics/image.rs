@@ -272,8 +272,8 @@ impl Drawable for Image {
         // be its-unit-size-in-pixels.
         use nalgebra;
         let real_scale = nalgebra::Vector3::new(
-            src_width * f32::from(self.width),
-            src_height * f32::from(self.height),
+            src_width * self.width as f32,
+            src_height * self.height as f32,
             1.0,
         );
         let new_param = param * Matrix4::new_nonuniform_scaling(&real_scale);
