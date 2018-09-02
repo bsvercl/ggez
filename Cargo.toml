@@ -1,0 +1,63 @@
+[package]
+name = "ggez"
+description = "A lightweight game framework for making 2D games with minimum friction, inspired by Love2D."
+version = "0.5.0"
+homepage = "http://ggez.rs"
+repository = "https://github.com/ggez/ggez"
+documentation = "https://docs.rs/ggez"
+keywords = ["ggez", "graphics", "2D", "game", "engine"]
+authors = [
+   "Rafael Epplee <raffomania@gmail.com>",
+   "Sven-Hendrik Haase <svenstaro@gmail.com>",
+   "Simon Heath <icefoxen@gmail.com>",
+]
+license = "MIT"
+readme = "README.md"
+categories = ["game-engines"]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[lib]
+name = "ggez"
+path = "src/lib.rs"
+
+[features]
+bzip2 = ["zip/bzip2"]
+default = ["bzip2"]
+multithread-image-decoding = ["image/hdr", "image/jpeg_rayon"]
+
+[dependencies]
+ash = "0.24"
+bitflags = "1.0"
+zip = { version = "0.4", default-features = false }
+app_dirs2 = "2"
+image = {version = "0.19", default-features = false, features = ["gif_codec", "jpeg", "ico", "png_codec", "pnm",
+"tga", "tiff", "webp", "bmp", "dxt", ] }
+rodio = "0.8"
+serde = "1"
+serde_derive = "1"
+toml = "0.4"
+log = "0.4"
+lyon = "0.11"
+smart-default = "0.2"
+nalgebra = {version = "0.16", features = ["mint"] }
+# Has to be the same version of mint that nalgebra uses here.
+mint = "0.5"
+winit = { version = "0.17", features = ["icon_loading"] }
+gilrs = "0.6"
+
+[dev-dependencies]
+chrono = "0.4"
+fern = "0.5"
+rand = "0.5"
+clap = "2"
+cgmath = { version = "0.16", features = ["mint"]}
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["windef", "winuser"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.12"
+cocoa = "0.18"
+objc = "0.2"
