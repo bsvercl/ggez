@@ -72,6 +72,7 @@ impl TextFragment {
     pub fn scale(mut self, scale: Scale) -> TextFragment {
         self.scale = Some(scale);
         self
+<<<<<<< HEAD
     }
 }
 
@@ -88,20 +89,37 @@ impl From<char> for TextFragment {
     fn from(ch: char) -> TextFragment {
         TextFragment {
             text: ch.to_string(),
+=======
+    }
+}
+
+impl<'a> From<&'a str> for TextFragment {
+    fn from(text: &'a str) -> TextFragment {
+        TextFragment {
+            text: text.to_owned(),
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
             ..Default::default()
         }
     }
 }
 
+<<<<<<< HEAD
 impl From<String> for TextFragment {
     fn from(text: String) -> TextFragment {
         TextFragment {
             text,
+=======
+impl From<char> for TextFragment {
+    fn from(ch: char) -> TextFragment {
+        TextFragment {
+            text: ch.to_string(),
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
             ..Default::default()
         }
     }
 }
 
+<<<<<<< HEAD
 // TODO: Scale ergonomics need to be better
 impl<T> From<(T, Font, f32)> for TextFragment
 where
@@ -122,6 +140,36 @@ struct CachedMetrics {
     height: Option<u32>,
 }
 
+=======
+impl From<String> for TextFragment {
+    fn from(text: String) -> TextFragment {
+        TextFragment {
+            text,
+            ..Default::default()
+        }
+    }
+}
+
+// TODO: Scale ergonomics need to be better
+impl<T> From<(T, Font, f32)> for TextFragment
+where
+    T: Into<TextFragment>,
+{
+    fn from((text, font, scale): (T, Font, f32)) -> TextFragment {
+        text.into().font(font).scale(Scale::uniform(scale))
+    }
+}
+
+/// Cached font metrics that we can keep attached to a `Text`
+/// so we don't have to keep recalculating them.
+#[derive(Clone, Debug)]
+struct CachedMetrics {
+    string: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+}
+
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
 impl Default for CachedMetrics {
     fn default() -> CachedMetrics {
         CachedMetrics {
@@ -250,7 +298,11 @@ impl Text {
                     None => WHITE,
                 },
             };
+<<<<<<< HEAD
             let font_id = match fragment.font{
+=======
+            let font_id = match fragment.font {
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
                 Some(font) => font.font_id,
                 None => self.font_id,
             };
@@ -325,7 +377,12 @@ impl Text {
         let mut max_height = 0;
         {
             let varied_section = self.generate_varied_section(Point2::new(0.0, 0.0), None);
+<<<<<<< HEAD
             let glyphed_section_texts = self.layout
+=======
+            let glyphed_section_texts = self
+                .layout
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
                 .calculate_glyphs(context.gfx_context.glyph_brush.fonts(), &varied_section);
             for glyphed_section_text in &glyphed_section_texts {
                 let (ref positioned_glyph, ..) = glyphed_section_text;
@@ -418,9 +475,13 @@ impl Font {
         let v = bytes.to_vec();
         let font_id = context.gfx_context.glyph_brush.add_font_bytes(v);
 
+<<<<<<< HEAD
         Ok(Font {
             font_id,
         })
+=======
+        Ok(Font { font_id })
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
     }
 
     /// Returns the baked-in bytes of default font (currently `DejaVuSerif.ttf`).
@@ -434,9 +495,13 @@ impl Font {
 
 impl Default for Font {
     fn default() -> Self {
+<<<<<<< HEAD
         Font {
             font_id: FontId(0)
         }
+=======
+        Font { font_id: FontId(0) }
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
     }
 }
 
@@ -479,7 +544,12 @@ where
     let param: DrawTransform = param.into();
     let screen_rect = screen_coordinates(context);
 
+<<<<<<< HEAD
     let (screen_x, screen_y, screen_w, screen_h) = (screen_rect.x, screen_rect.y, screen_rect.w, screen_rect.h);
+=======
+    let (screen_x, screen_y, screen_w, screen_h) =
+        (screen_rect.x, screen_rect.y, screen_rect.w, screen_rect.h);
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
     let scale_x = screen_w / 2.0;
     let scale_y = screen_h / -2.0;
 
@@ -508,6 +578,7 @@ where
     */
     // Optimized version has a speedup of ~1.29 (175ns vs 225ns)
     type Mat4 = na::Matrix4<f32>;
+<<<<<<< HEAD
     let m_transform = Mat4::new(scale_x, 0.0, 0.0, scale_x - screen_x,
                                 0.0, scale_y, 0.0, -scale_y - screen_y,
                                 0.0, 0.0, 1.0, 0.0,
@@ -517,6 +588,45 @@ where
                                     0.0, 1.0 / scale_y, 0.0, (scale_y + screen_y) / scale_y,
                                     0.0, 0.0, 1.0, 0.0,
                                     0.0, 0.0, 0.0, 1.0);
+=======
+    let m_transform = Mat4::new(
+        scale_x,
+        0.0,
+        0.0,
+        scale_x - screen_x,
+        0.0,
+        scale_y,
+        0.0,
+        -scale_y - screen_y,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    );
+
+    let m_transform_inv = Mat4::new(
+        1.0 / scale_x,
+        0.0,
+        0.0,
+        (screen_x / scale_x) - 1.0,
+        0.0,
+        1.0 / scale_y,
+        0.0,
+        (scale_y + screen_y) / scale_y,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    );
+>>>>>>> ff1961a3b9407b1f3fda674e5f92406494d87c65
 
     let final_matrix = m_transform_inv * param.matrix * m_transform;
 
