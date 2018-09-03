@@ -45,7 +45,9 @@ impl fmt::Debug for Image {
 }
 
 impl Image {
-    pub(crate) fn new<P>(ctx: &mut Context, path: P) -> GameResult<Self>
+    /// Load a new image from the file at the given path. The documentation for the
+    /// `filesystem` module explains how the path must be specified.
+    pub fn new<P>(ctx: &mut Context, path: P) -> GameResult<Self>
     where
         P: AsRef<path::Path>,
     {
