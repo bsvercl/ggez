@@ -1,10 +1,12 @@
 use std::cell::RefCell;
+use std::io::Read;
 use std::rc::Rc;
 
 use ash::extensions::{Surface, Swapchain};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
+use glsl_to_spirv;
 use std::ffi::CString;
 use std::mem;
 use std::ptr;
@@ -111,12 +113,13 @@ impl GraphicsContext {
         let entry: Entry<V1_0> = Entry::new().expect("Failed to load Vulkan entry");
         let instance: Instance<V1_0> = {
             let application_name = CString::new(window_setup.title.clone()).expect("Wrong name");
+            let engine_name = CString::new("ggez").expect("Wrong name");
             let application_info = vk::ApplicationInfo {
                 s_type: vk::StructureType::ApplicationInfo,
                 p_next: ptr::null(),
                 p_application_name: application_name.as_ptr(),
                 application_version: 1,
-                p_engine_name: CString::new("ggez").expect("Wrong name").as_ptr(),
+                p_engine_name: engine_name.as_ptr(),
                 engine_version: 1,
                 // VK_API_VERSION_1_0
                 api_version: vk_make_version!(1, 0, 0),
@@ -515,10 +518,24 @@ impl GraphicsContext {
         };
 
         let graphics_pipeline = {
-            let vertex_module =
-                vulkan::create_shader_module(&device, include_bytes!("shader/basic_450.glslv"))?;
-            let fragment_module =
-                vulkan::create_shader_module(&device, include_bytes!("shader/basic_450.glslf"))?;
+            let vertex_module = {
+                let mut spirv = glsl_to_spirv::compile(
+                    include_str!("shader/basic_450.glslv"),
+                    glsl_to_spirv::ShaderType::Vertex,
+                ).expect("TODO: REPLACE ME");
+                let mut bytes = Vec::new();
+                let _ = spirv.read_to_end(&mut bytes).expect("TODO: REPLACE ME");
+                vulkan::create_shader_module(&device, &bytes)?
+            };
+            let fragment_module = {
+                let mut spirv = glsl_to_spirv::compile(
+                    include_str!("shader/basic_450.glslf"),
+                    glsl_to_spirv::ShaderType::Fragment,
+                ).expect("TODO: REPLACE ME");
+                let mut bytes = Vec::new();
+                let _ = spirv.read_to_end(&mut bytes).expect("TODO: REPLACE ME");
+                vulkan::create_shader_module(&device, &bytes)?
+            };
             let entrypoint = CString::new("main").expect("Wrong name");
             let stages = [
                 vk::PipelineShaderStageCreateInfo {

@@ -29,6 +29,7 @@ multithread-image-decoding = ["image/hdr", "image/jpeg_rayon"]
 
 [dependencies]
 ash = "0.24"
+glsl-to-spirv = "0.1"
 bitflags = "1.0"
 zip = { version = "0.4", default-features = false }
 app_dirs2 = "2"

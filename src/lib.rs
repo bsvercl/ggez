@@ -38,6 +38,7 @@ extern crate bitflags;
 extern crate app_dirs2;
 #[cfg(target_os = "macos")]
 extern crate cocoa;
+extern crate glsl_to_spirv;
 extern crate image;
 #[macro_use]
 extern crate log;
