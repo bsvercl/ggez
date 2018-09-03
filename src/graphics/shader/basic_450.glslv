@@ -5,7 +5,7 @@ layout(set = 0, binding = 0, std140) uniform Globals {
     mat4 u_MVP;
 };
 
-layout(location = 0) in vec2 a_Position;
+layout(location = 0) in vec2 a_Pos;
 layout(location = 1) in vec2 a_Uv;
 layout(location = 2) in vec4 a_VertColor;
 
