@@ -515,7 +515,6 @@ impl GraphicsContext {
         };
 
         let graphics_pipeline = {
-            // TODO
             let vertex_module =
                 vulkan::create_shader_module(&device, include_bytes!("shader/basic_450.glslv"))?;
             let fragment_module =
