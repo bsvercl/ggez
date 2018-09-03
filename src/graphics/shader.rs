@@ -35,3 +35,5 @@ pub enum BlendMode {
     /// When combining two fragments, choose the darker value
     Darken,
 }
+
+// TODO: Allow user defined shaders just like GGEZ did. It should be possible to implement using `rspirv` or similar crate.
