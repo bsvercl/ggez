@@ -172,6 +172,7 @@ impl GraphicsContext {
                 p_queue_priorities: queue_priorities.as_ptr(),
             }];
             let features = instance.get_physical_device_features(*pdevice);
+            let extensions = [Swapchain::name().as_ptr()];
             let create_info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DeviceCreateInfo,
                 p_next: ptr::null(),
@@ -180,8 +181,8 @@ impl GraphicsContext {
                 p_queue_create_infos: queue_create_infos.as_ptr(),
                 enabled_layer_count: 0,
                 pp_enabled_layer_names: ptr::null(),
-                enabled_extension_count: 0,
-                pp_enabled_extension_names: ptr::null(),
+                enabled_extension_count: extensions.len() as u32,
+                pp_enabled_extension_names: extensions.as_ptr(),
                 p_enabled_features: &features,
             };
             unsafe { instance.create_device(*pdevice, &create_info, None)? }
