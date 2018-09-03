@@ -64,12 +64,10 @@ impl Context {
         let audio_context = audio::AudioContext::new()?;
         let events_loop = winit::EventsLoop::new();
         let timer_context = timer::TimeContext::new();
-        let backend_spec = graphics::GlBackendSpec::from(conf.backend);
         let graphics_context = graphics::GraphicsContext::new(
             &events_loop,
             &conf.window_setup,
             conf.window_mode,
-            backend_spec,
             debug_id,
         )?;
         let mouse_context = mouse::MouseContext::new();
@@ -196,12 +194,6 @@ impl ContextBuilder {
     /// Sets the window mode settings
     pub fn window_mode(mut self, mode: conf::WindowMode) -> Self {
         self.conf.window_mode = mode;
-        self
-    }
-
-    /// Sets the graphics backend
-    pub fn backend(mut self, backend: conf::Backend) -> Self {
-        self.conf.backend = backend;
         self
     }
 

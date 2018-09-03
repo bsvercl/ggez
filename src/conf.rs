@@ -227,37 +227,6 @@ impl WindowSetup {
     }
 }
 
-/// Possible backends.
-/// Currently, only OpenGL Core spec is supported,
-/// but this lets you specify the version numbers.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, SmartDefault)]
-#[serde(tag = "type")]
-pub enum Backend {
-    /// Defaults to OpenGL 3.2, which is supported by basically
-    /// every machine since 2009 or so (apart from the ones that don't)
-    #[default]
-    OpenGL {
-        /// OpenGL major version
-        #[default = r#"3"#]
-        major: u8,
-        /// OpenGL minor version
-        #[default = r#"2"#]
-        minor: u8,
-    },
-}
-
-impl Backend {
-    /// Set OpenGL backend and version.
-    pub fn opengl(self, new_major: u8, new_minor: u8) -> Self {
-        match self {
-            Backend::OpenGL { .. } => Backend::OpenGL {
-                major: new_major,
-                minor: new_minor,
-            },
-        }
-    }
-}
-
 /// The possible number of samples for multisample anti-aliasing
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NumSamples {
@@ -306,8 +275,6 @@ pub struct Conf {
     pub window_mode: WindowMode,
     /// Window setting information that must be set at init-time
     pub window_setup: WindowSetup,
-    /// Backend configuration
-    pub backend: Backend,
 }
 
 impl Conf {

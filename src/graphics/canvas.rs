@@ -1,12 +1,6 @@
 //! I guess these docs will never appear since we re-export the canvas
 //! module from graphics...
 
-use gfx::format::Swizzle;
-use gfx::handle::RawRenderTargetView;
-use gfx::memory::{Bind, Usage};
-use gfx::texture::{AaMode, Kind};
-use gfx::Factory;
-
 use conf;
 use context::DebugId;
 use error::*;

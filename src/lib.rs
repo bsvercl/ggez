@@ -32,20 +32,22 @@
 #![warn(missing_copy_implementations)]
 
 #[macro_use]
+extern crate ash;
+#[macro_use]
 extern crate bitflags;
 extern crate app_dirs2;
-#[macro_use]
-extern crate gfx;
-extern crate gfx_device_gl;
-extern crate gfx_glyph;
-extern crate gfx_window_glutin;
-extern crate glutin;
+#[cfg(target_os = "macos")]
+extern crate cocoa;
 extern crate image;
 #[macro_use]
 extern crate log;
 extern crate lyon;
+#[cfg(target_os = "macos")]
+extern crate metal;
 extern crate mint;
 pub extern crate nalgebra;
+#[cfg(target_os = "macos")]
+extern crate objc;
 extern crate rodio;
 #[macro_use]
 extern crate serde_derive;
@@ -53,6 +55,8 @@ extern crate serde_derive;
 extern crate smart_default;
 extern crate gilrs;
 extern crate toml;
+#[cfg(target_os = "windows")]
+extern crate winapi;
 extern crate winit;
 extern crate zip;
 

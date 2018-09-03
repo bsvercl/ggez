@@ -372,29 +372,19 @@ pub enum FilterMode {
     Nearest,
 }
 
-use gfx;
-use gfx::texture::FilterMethod;
+use ash::vk;
 
-impl From<FilterMethod> for FilterMode {
-    fn from(f: FilterMethod) -> Self {
+impl From<vk::Filter> for FilterMode {
+    fn from(f: vk::Filter) -> Self {
         match f {
-            FilterMethod::Scale => FilterMode::Nearest,
-            _other => FilterMode::Linear,
-        }
-    }
-}
-
-impl From<FilterMode> for FilterMethod {
-    fn from(f: FilterMode) -> Self {
-        match f {
-            FilterMode::Nearest => FilterMethod::Scale,
-            FilterMode::Linear => FilterMethod::Bilinear,
+            vk::Filter::Nearest => FilterMode::Nearest,
+            vk::Filter::Linear => FilterMode::Linear,
         }
     }
 }
 
 /// Specifies how to wrap textures.
-pub type WrapMode = gfx::texture::WrapMode;
+pub type WrapMode = vk::SamplerAddressMode;
 
 #[cfg(test)]
 mod tests {

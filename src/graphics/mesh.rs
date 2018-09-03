@@ -1,5 +1,7 @@
+use ash::version::DeviceV1_0;
+use ash::vk;
 use context::DebugId;
-use gfx::traits::FactoryExt;
+use graphics::vulkan;
 use graphics::*;
 use lyon;
 use lyon::tessellation as t;
@@ -40,11 +42,10 @@ pub use self::t::{FillOptions, FillRule, LineCap, LineJoin, StrokeOptions};
 ///                 na::Point2::new(0.0, 0.0),
 ///             ],
 ///             1.0,
-///             graphics::WHITE,
 ///         )
 ///         // Add vertices for an exclamation mark!
-///         .ellipse(DrawMode::Fill, na::Point2::new(0.0, 25.0), 2.0, 15.0, 2.0, graphics::WHITE,)
-///         .circle(DrawMode::Fill, na::Point2::new(0.0, 45.0), 2.0, 2.0, graphics::WHITE,)
+///         .ellipse(DrawMode::Fill, na::Point2::new(0.0, 25.0), 2.0, 15.0, 2.0)
+///         .circle(DrawMode::Fill, na::Point2::new(0.0, 45.0), 2.0, 2.0)
 ///         // Finalize then unwrap. Unwrapping via `?` operator either yields the final `Mesh`,
 ///         // or propagates the error (note return type).
 ///         .build(ctx)?;
@@ -85,16 +86,21 @@ impl MeshBuilder {
     /// Create a new mesh for a circle.
     ///
     /// For the meaning of the `tolerance` parameter, [see here](https://docs.rs/lyon_geom/0.9.0/lyon_geom/#flattening).
-    pub fn circle<P>(&mut self, mode: DrawMode, point: P, radius: f32, tolerance: f32, color: Color) -> &mut Self
+    pub fn circle<P>(
+        &mut self,
+        mode: DrawMode,
+        point: P,
+        radius: f32,
+        tolerance: f32,
+        color: Color,
+    ) -> &mut Self
     where
         P: Into<mint::Point2<f32>>,
     {
         {
             let point = point.into();
             let buffers = &mut self.buffer;
-            let vb = VertexBuilder {
-                color,
-            };
+            let vb = VertexBuilder { color };
             match mode {
                 DrawMode::Fill => {
                     // These builders have to be in separate match arms 'cause they're actually
@@ -162,9 +168,7 @@ impl MeshBuilder {
         {
             let buffers = &mut self.buffer;
             let point = point.into();
-            let vb = VertexBuilder {
-                color,
-            };
+            let vb = VertexBuilder { color };
             match mode {
                 DrawMode::Fill => {
                     let builder = &mut t::BuffersBuilder::new(buffers, vb);
@@ -231,7 +235,13 @@ impl MeshBuilder {
         self.polyline_inner(mode, points, true, color)
     }
 
-    fn polyline_inner<P>(&mut self, mode: DrawMode, points: &[P], is_closed: bool, color: Color) -> &mut Self
+    fn polyline_inner<P>(
+        &mut self,
+        mode: DrawMode,
+        points: &[P],
+        is_closed: bool,
+        color: Color,
+    ) -> &mut Self
     where
         P: Into<mint::Point2<f32>> + Clone,
     {
@@ -242,9 +252,7 @@ impl MeshBuilder {
                 let mint_point: mint::Point2<f32> = p.into();
                 t::math::point(mint_point.x, mint_point.y)
             });
-            let vb = VertexBuilder {
-                color,
-            };
+            let vb = VertexBuilder { color };
             match mode {
                 DrawMode::Fill => {
                     let builder = &mut t::BuffersBuilder::new(buffers, vb);
@@ -280,9 +288,7 @@ impl MeshBuilder {
         {
             let buffers = &mut self.buffer;
             let rect = t::math::rect(bounds.x, bounds.y, bounds.w, bounds.h);
-            let vb = VertexBuilder {
-                color,
-            };
+            let vb = VertexBuilder { color };
             match mode {
                 DrawMode::Fill => {
                     // These builders have to be in separate match arms 'cause they're actually
@@ -339,9 +345,7 @@ impl MeshBuilder {
                     // nicer, so we'll just live with it.
                 .collect::<Vec<_>>();
             let tris = tris.chunks(3);
-            let vb = VertexBuilder {
-                color,
-            };
+            let vb = VertexBuilder { color };
             let builder: &mut t::BuffersBuilder<_, _, _, _> =
                 &mut t::BuffersBuilder::new(&mut self.buffer, vb);
             use lyon::tessellation::GeometryBuilder;
@@ -389,13 +393,88 @@ impl MeshBuilder {
     /// Takes the accumulated geometry and load it into GPU memory,
     /// creating a single `Mesh`.
     pub fn build(&self, ctx: &mut Context) -> GameResult<Mesh> {
-        let (vbuf, slice) = ctx.gfx_context
-            .factory
-            .create_vertex_buffer_with_slice(&self.buffer.vertices[..], &self.buffer.indices[..]);
+        let gfx = &ctx.gfx_context;
+
+        // The mesh data is static so we'll upload it into device memory
+        let vertex_staging_buffer = vulkan::Buffer::new(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            &self.buffer.vertices,
+            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+        let vertex_buffer = vulkan::Buffer::empty(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            vertex_staging_buffer.size(),
+            vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        )?;
+        vulkan::single_time_commands(
+            &gfx.device,
+            gfx.graphics_queue,
+            gfx.command_pool,
+            &[vk::PIPELINE_STAGE_TRANSFER_BIT],
+            &[],
+            &[],
+            |device, command_buffer| {
+                let region = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: vertex_staging_buffer.size(),
+                };
+                unsafe {
+                    device.cmd_copy_buffer(
+                        command_buffer,
+                        vertex_staging_buffer.handle(),
+                        vertex_buffer.handle(),
+                        &[region],
+                    );
+                }
+            },
+        )?;
+
+        let index_staging_buffer = vulkan::Buffer::new(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            &self.buffer.indices,
+            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+        let index_buffer = vulkan::Buffer::empty(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            vertex_staging_buffer.size(),
+            vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_INDEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        )?;
+        vulkan::single_time_commands(
+            &gfx.device,
+            gfx.graphics_queue,
+            gfx.command_pool,
+            &[vk::PIPELINE_STAGE_TRANSFER_BIT],
+            &[],
+            &[],
+            |device, command_buffer| {
+                let region = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: index_staging_buffer.size(),
+                };
+                unsafe {
+                    device.cmd_copy_buffer(
+                        command_buffer,
+                        index_staging_buffer.handle(),
+                        index_buffer.handle(),
+                        &[region],
+                    );
+                }
+            },
+        )?;
 
         Ok(Mesh {
-            buffer: vbuf,
-            slice,
+            vertex_buffer,
+            index_buffer,
             blend_mode: None,
             debug_id: DebugId::get(ctx),
         })
@@ -433,15 +512,20 @@ impl t::VertexConstructor<t::StrokeVertex, Vertex> for VertexBuilder {
 /// via a `MeshBuilder`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mesh {
-    buffer: gfx::handle::Buffer<gfx_device_gl::Resources, Vertex>,
-    slice: gfx::Slice<gfx_device_gl::Resources>,
+    vertex_buffer: vulkan::Buffer,
+    index_buffer: vulkan::Buffer,
     blend_mode: Option<BlendMode>,
     debug_id: DebugId,
 }
 
 impl Mesh {
     /// Create a new mesh for a line of one or more connected segments.
-    pub fn new_line<P>(ctx: &mut Context, points: &[P], width: f32, color: Color) -> GameResult<Mesh>
+    pub fn new_line<P>(
+        ctx: &mut Context,
+        points: &[P],
+        width: f32,
+        color: Color,
+    ) -> GameResult<Mesh>
     where
         P: Into<mint::Point2<f32>> + Clone,
     {
@@ -486,7 +570,12 @@ impl Mesh {
     }
 
     /// Create a new mesh for series of connected lines.
-    pub fn new_polyline<P>(ctx: &mut Context, mode: DrawMode, points: &[P], color: Color,) -> GameResult<Mesh>
+    pub fn new_polyline<P>(
+        ctx: &mut Context,
+        mode: DrawMode,
+        points: &[P],
+        color: Color,
+    ) -> GameResult<Mesh>
     where
         P: Into<mint::Point2<f32>> + Clone,
     {
@@ -496,7 +585,12 @@ impl Mesh {
     }
 
     /// Create a new mesh for closed polygon.
-    pub fn new_polygon<P>(ctx: &mut Context, mode: DrawMode, points: &[P], color: Color,) -> GameResult<Mesh>
+    pub fn new_polygon<P>(
+        ctx: &mut Context,
+        mode: DrawMode,
+        points: &[P],
+        color: Color,
+    ) -> GameResult<Mesh>
     where
         P: Into<mint::Point2<f32>> + Clone,
     {
@@ -506,14 +600,19 @@ impl Mesh {
     }
 
     /// Create a new mesh for a rectangle
-    pub fn new_rectangle(ctx: &mut Context, mode: DrawMode, bounds: Rect, color: Color,) -> GameResult<Mesh> {
+    pub fn new_rectangle(
+        ctx: &mut Context,
+        mode: DrawMode,
+        bounds: Rect,
+        color: Color,
+    ) -> GameResult<Mesh> {
         let mut mb = MeshBuilder::new();
         let _ = mb.rectangle(mode, bounds, color);
         mb.build(ctx)
     }
 
     /// Create a new `Mesh` from a raw list of triangle points.
-    pub fn from_triangles<P>(ctx: &mut Context, triangles: &[P], color: Color,) -> GameResult<Mesh>
+    pub fn from_triangles<P>(ctx: &mut Context, triangles: &[P], color: Color) -> GameResult<Mesh>
     where
         P: Into<mint::Point2<f32>> + Clone,
     {
@@ -535,16 +634,7 @@ impl Mesh {
     where
         V: Into<Vertex> + Clone,
     {
-        let verts: Vec<Vertex> = verts.iter().cloned().map(|v| v.into()).collect();
-        let (vbuf, slice) = ctx.gfx_context
-            .factory
-            .create_vertex_buffer_with_slice(&verts[..], indices);
-        Mesh {
-            buffer: vbuf,
-            slice,
-            blend_mode: None,
-            debug_id: DebugId::get(ctx),
-        }
+        unimplemented!()
     }
 }
 
@@ -553,24 +643,13 @@ impl Drawable for Mesh {
     where
         D: Into<DrawTransform>,
     {
-        let param = param.into();
-        self.debug_id.assert(ctx);
-        let gfx = &mut ctx.gfx_context;
-        gfx.update_instance_properties(param)?;
-
-        gfx.data.vbuf = self.buffer.clone();
-        let texture = gfx.white_image.texture.clone();
-
-        let typed_thingy = gfx.backend_spec.raw_to_typed_shader_resource(texture);
-        gfx.data.tex.0 = typed_thingy;
-
-        gfx.draw(Some(&self.slice))?;
-
         Ok(())
     }
+
     fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
         self.blend_mode = mode;
     }
+
     fn blend_mode(&self) -> Option<BlendMode> {
         self.blend_mode
     }
