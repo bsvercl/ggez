@@ -801,7 +801,7 @@ impl GraphicsContext {
         let mut new_draw_params = draw_params;
         new_draw_params.color = draw_params.color;
         let properties = new_draw_params.to_instance_properties(self.srgb);
-        self.instance_buffer.update(&[properties]);
+        self.instance_buffer.update(&[properties])?;
         Ok(())
     }
 

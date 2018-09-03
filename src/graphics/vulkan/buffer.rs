@@ -100,7 +100,7 @@ impl Buffer {
             usage,
             props,
         )?;
-        buffer.update(data);
+        buffer.update(data)?;
         Ok(buffer)
     }
 
