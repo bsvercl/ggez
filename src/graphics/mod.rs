@@ -109,8 +109,11 @@ const QUAD_INDICES: [u16; 6] = [0, 1, 2, 0, 2, 3];
 
 /// Clear the screen to the background color.
 /// TODO: Into<Color> ?
-pub fn clear(ctx: &mut Context, color: Color) {
-    unimplemented!()
+pub fn clear(ctx: &mut Context, color: Color) -> GameResult {
+    // This doesn't actually clear the screen, it just sets the clear color to use during the render pass
+    let gfx = &mut ctx.gfx_context;
+    gfx.clear_color = color.into();
+    gfx.begin_frame()
 }
 
 /// Draws the given `Drawable` object to the screen by calling its
@@ -128,8 +131,8 @@ where
 /// Call this at the end of your `EventHandler`'s `draw()` method.
 ///
 /// Unsets any active canvas.
-pub fn present(ctx: &mut Context) -> GameResult<()> {
-    unimplemented!()
+pub fn present(ctx: &mut Context) -> GameResult {
+    ctx.gfx_context.end_frame()
 }
 
 /// Take a screenshot by outputting the current render surface

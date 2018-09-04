@@ -76,7 +76,7 @@ pub(crate) struct GraphicsContext {
     current_frame: usize,
     image_count: usize,
     swapchain_image_index: u32,
-    clear_color: [f32; 4],
+    pub(crate) clear_color: [f32; 4],
     swapchain: vk::SwapchainKHR,
     swapchain_create_info: vk::SwapchainCreateInfoKHR,
     surface: vk::SurfaceKHR,
@@ -863,7 +863,6 @@ impl GraphicsContext {
             }
         }
         // Do the drawing
-        // TODO: Instance buffer
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.command_buffers[self.current_frame],
@@ -882,6 +881,12 @@ impl GraphicsContext {
                 self.command_buffers[self.current_frame],
                 VERTEX_BUFFER_BINDING_ID,
                 &[vertex_buffer.handle()],
+                &[0],
+            );
+            self.device.cmd_bind_vertex_buffers(
+                self.command_buffers[self.current_frame],
+                INSTANCE_BUFFER_BINDING_ID,
+                &[self.instance_buffer.handle()],
                 &[0],
             );
             self.device.cmd_bind_index_buffer(
@@ -911,7 +916,7 @@ impl GraphicsContext {
                 .reset_fences(&[self.frame_fences[self.current_frame]])?;
         }
         // Acquire swapchain image
-        let swapchain_image_index = unsafe {
+        self.swapchain_image_index = unsafe {
             self.swapchain_loader.acquire_next_image_khr(
                 self.swapchain,
                 !0,
