@@ -6,9 +6,11 @@
 
 use std::fmt;
 
-use gilrs::{Gamepad, Gilrs};
+pub use gilrs::Gamepad;
+use gilrs::Gilrs;
 
 use context::Context;
+use event::{Axis, Button};
 use GameResult;
 
 /// A structure that contains gamepad state.
@@ -47,11 +49,11 @@ pub fn list_gamepads() {
 }
 
 /// Returns the state of the given axis on a gamepad.
-pub fn axis() {
-    unimplemented!()
+pub fn axis(gamepad: &Gamepad, axis: Axis) -> f32 {
+    gamepad.value(axis)
 }
 
 /// Returns the state of the given button on a gamepad.
-pub fn button_pressed() {
-    unimplemented!()
+pub fn button_pressed(gamepad: &Gamepad, btn: Button) -> bool {
+    gamepad.is_pressed(btn)
 }
