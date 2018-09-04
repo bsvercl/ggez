@@ -863,6 +863,7 @@ impl GraphicsContext {
             }
         }
         // Do the drawing
+        // TODO: Instance buffer
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.command_buffers[self.current_frame],
