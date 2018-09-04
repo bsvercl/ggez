@@ -40,7 +40,7 @@ pub(crate) struct GraphicsContext {
     white_image: Image,
     pub(crate) screen_rect: Rect,
     color_format: vk::Format,
-    depth_format: vk::Format,
+    // depth_format: vk::Format,
     srgb: bool,
     pub(crate) hidpi_factor: f32,
     pub(crate) os_hidpi_factor: f32,
@@ -51,7 +51,7 @@ pub(crate) struct GraphicsContext {
     pdevice: vk::PhysicalDevice,
     pub(crate) pdevice_memory_props: vk::PhysicalDeviceMemoryProperties,
     pub(crate) graphics_queue: vk::Queue,
-    pub(crate) graphics_queue_family_index: u32,
+    pub(crate) graphics_queue_family_index: usize,
     graphics_pipeline: vk::Pipeline,
     graphics_pipeline_layout: vk::PipelineLayout,
     descriptor_pool: vk::DescriptorPool,
@@ -60,6 +60,7 @@ pub(crate) struct GraphicsContext {
     render_pass: vk::RenderPass,
     framebuffers: Vec<vk::Framebuffer>,
     pub(crate) device: Device<V1_0>,
+    swapchain: vk::SwapchainKHR,
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
     // color_images: Vec<vk::Image>,
@@ -77,8 +78,6 @@ pub(crate) struct GraphicsContext {
     image_count: usize,
     swapchain_image_index: u32,
     pub(crate) clear_color: [f32; 4],
-    swapchain: vk::SwapchainKHR,
-    swapchain_create_info: vk::SwapchainCreateInfoKHR,
     surface: vk::SurfaceKHR,
     default_sampler: vk::Sampler,
     swapchain_loader: Swapchain,
@@ -166,6 +165,8 @@ impl GraphicsContext {
             })
             .next()
             .unwrap();
+
+        let pdevice_memory_props = instance.get_physical_device_memory_properties(*pdevice);
 
         let device: Device<V1_0> = {
             let queue_priorities = [1.0];
@@ -265,8 +266,9 @@ impl GraphicsContext {
             unsafe { swapchain_loader.create_swapchain_khr(&create_info, None)? }
         };
 
-        let swapchain_image_views = swapchain_loader
-            .get_swapchain_images_khr(swapchain)?
+        let swapchain_images = swapchain_loader.get_swapchain_images_khr(swapchain)?;
+
+        let swapchain_image_views = swapchain_images
             .iter()
             .map(|&image| {
                 let create_info = vk::ImageViewCreateInfo {
@@ -765,7 +767,103 @@ impl GraphicsContext {
             graphics_pipeline
         };
 
-        unimplemented!()
+        let white_image = Image::make_raw(
+            &device,
+            &pdevice_memory_props,
+            command_pool,
+            graphics_queue,
+            1,
+            1,
+            &[255, 255, 255, 255],
+            surface_format.format,
+            debug_id,
+        )?;
+
+        let globals_buffer = vulkan::Buffer::empty(
+            &device,
+            &pdevice_memory_props,
+            mem::size_of::<Globals>() as vk::DeviceSize,
+            vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        )?;
+        let instance_buffer = vulkan::Buffer::empty(
+            &device,
+            &pdevice_memory_props,
+            mem::size_of::<InstanceProperties>() as vk::DeviceSize,
+            vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        )?;
+
+        let left = 0.0;
+        let right = window_mode.width;
+        let top = 0.0;
+        let bottom = window_mode.height;
+        let initial_projection = Matrix4::identity();
+        let initial_transform = Matrix4::identity();
+        let globals = Globals {
+            mvp: initial_projection.into(),
+        };
+
+        let mut gfx = GraphicsContext {
+            globals,
+            globals_buffer,
+            instance_buffer,
+            projection: initial_projection,
+            modelview_stack: vec![initial_transform],
+            white_image,
+            screen_rect: Rect::new(left, top, right - left, bottom - top),
+            color_format: surface_format.format,
+            srgb,
+            hidpi_factor,
+            os_hidpi_factor,
+            window,
+            multisample_samples: 1,
+            entry,
+            instance,
+            pdevice: *pdevice,
+            pdevice_memory_props,
+            graphics_queue,
+            graphics_queue_family_index,
+            graphics_pipeline,
+            graphics_pipeline_layout,
+            descriptor_pool,
+            descriptor_set,
+            descriptor_set_layout,
+            render_pass,
+            framebuffers,
+            device,
+            swapchain,
+            swapchain_images,
+            swapchain_image_views,
+            command_pool,
+            command_buffers,
+            image_available_semaphores,
+            rendering_complete_semaphores,
+            frame_fences,
+            current_frame: 0,
+            image_count: image_count as usize,
+            swapchain_image_index: !0,
+            clear_color: [0.0; 4],
+            surface,
+            default_sampler,
+            swapchain_loader,
+            surface_loader,
+        };
+        gfx.set_window_mode(window_mode)?;
+
+        let w = window_mode.width;
+        let h = window_mode.height;
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            w,
+            h,
+        };
+        gfx.set_projection_rect(rect);
+        gfx.calculate_transform_matrix();
+        gfx.update_globals()?;
+
+        Ok(gfx)
     }
 
     pub(crate) fn update_globals(&mut self) -> GameResult {
@@ -1177,9 +1275,9 @@ impl GraphicsContext {
         self.color_format
     }
 
-    pub(crate) fn depth_format(&self) -> vk::Format {
-        self.depth_format
-    }
+    // pub(crate) fn depth_format(&self) -> vk::Format {
+    //     self.depth_format
+    // }
 
     /// This is a filthy hack allow users to override hidpi
     /// scaling if they want to.  Everything that winit touches
