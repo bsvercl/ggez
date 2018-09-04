@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::io::Read;
 use std::rc::Rc;
 
-use ash::extensions::{Surface, Swapchain};
+use ash::extensions::{DebugReport, Surface, Swapchain};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use ash::{Device, Entry, Instance};
@@ -31,6 +31,34 @@ macro_rules! offset_of {
     }};
 }
 
+unsafe extern "system" fn vulkan_debug_callback(
+    flags: vk::DebugReportFlagsEXT,
+    _: vk::DebugReportObjectTypeEXT,
+    _: vk::uint64_t,
+    _: vk::size_t,
+    _: vk::int32_t,
+    _: *const vk::c_char,
+    p_message: *const vk::c_char,
+    _: *mut vk::c_void,
+) -> u32 {
+    use std::ffi::CStr;
+    let typ = if flags.subset(vk::DEBUG_REPORT_ERROR_BIT_EXT) {
+        "ERROR:"
+    } else if flags.subset(vk::DEBUG_REPORT_WARNING_BIT_EXT) {
+        "WARNING:"
+    } else if flags.subset(vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
+        "PERFORMANCE WARNING:"
+    } else if flags.subset(vk::DEBUG_REPORT_INFORMATION_BIT_EXT) {
+        "INFORMATION:"
+    } else if flags.subset(vk::DEBUG_REPORT_DEBUG_BIT_EXT) {
+        "DEBUG:"
+    } else {
+        "UNKNOWN:"
+    };
+    println!("{} {:?}", typ, CStr::from_ptr(p_message));
+    0
+}
+
 pub(crate) struct GraphicsContext {
     globals: Globals,
     globals_buffer: vulkan::Buffer,
@@ -50,6 +78,7 @@ pub(crate) struct GraphicsContext {
     multisample_samples: u32,
     entry: Entry<V1_0>,
     instance: Instance<V1_0>,
+    debug_callback: vk::DebugReportCallbackEXT,
     pdevice: vk::PhysicalDevice,
     pub(crate) pdevice_memory_props: vk::PhysicalDeviceMemoryProperties,
     pub(crate) graphics_queue: vk::Queue,
@@ -84,6 +113,7 @@ pub(crate) struct GraphicsContext {
     default_sampler: vk::Sampler,
     swapchain_loader: Swapchain,
     surface_loader: Surface,
+    debug_loader: DebugReport,
 }
 
 impl GraphicsContext {
@@ -130,17 +160,38 @@ impl GraphicsContext {
             };
 
             let extensions = vulkan::instance_extension_names();
+            let layers = [
+                CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name"),
+                CString::new("VK_LAYER_RENDERDOC_Capture").expect("Wrong name"),
+            ];
+            let layers = layers
+                .iter()
+                .map(|layer| layer.as_ptr())
+                .collect::<Vec<_>>();
             let create_info = vk::InstanceCreateInfo {
                 s_type: vk::StructureType::InstanceCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::InstanceCreateFlags::empty(),
                 p_application_info: &application_info,
-                enabled_layer_count: 0,
-                pp_enabled_layer_names: ptr::null(),
+                enabled_layer_count: layers.len() as u32,
+                pp_enabled_layer_names: layers.as_ptr(),
                 enabled_extension_count: extensions.len() as u32,
                 pp_enabled_extension_names: extensions.as_ptr(),
             };
             unsafe { entry.create_instance(&create_info, None)? }
+        };
+
+        let debug_loader =
+            DebugReport::new(&entry, &instance).expect("Failed to load debug report extension");
+        let debug_callback = {
+            let create_info = vk::DebugReportCallbackCreateInfoEXT {
+                s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
+                p_next: ptr::null(),
+                flags: vk::DebugReportFlagsEXT::all(),
+                pfn_callback: vulkan_debug_callback,
+                p_user_data: ptr::null_mut(),
+            };
+            unsafe { debug_loader.create_debug_report_callback_ext(&create_info, None)? }
         };
 
         let surface_loader =
@@ -148,15 +199,15 @@ impl GraphicsContext {
         let surface = vulkan::create_surface(&entry, &instance, &window)?;
 
         let pdevices = instance.enumerate_physical_devices()?;
-        let pdevice = pdevices.iter().next().unwrap();
+        let pdevice = pdevices.iter().cloned().next().unwrap();
         let graphics_queue_family_index = instance
-            .get_physical_device_queue_family_properties(*pdevice)
+            .get_physical_device_queue_family_properties(pdevice)
             .iter()
             .enumerate()
             .map(|(index, props)| {
                 if props.queue_flags.subset(vk::QUEUE_GRAPHICS_BIT)
                     && surface_loader.get_physical_device_surface_support_khr(
-                        *pdevice,
+                        pdevice,
                         index as u32,
                         surface,
                     ) {
@@ -168,7 +219,7 @@ impl GraphicsContext {
             .next()
             .unwrap();
 
-        let pdevice_memory_props = instance.get_physical_device_memory_properties(*pdevice);
+        let pdevice_memory_props = instance.get_physical_device_memory_properties(pdevice);
 
         let device: Device<V1_0> = {
             let queue_priorities = [1.0];
@@ -180,7 +231,7 @@ impl GraphicsContext {
                 queue_count: queue_priorities.len() as u32,
                 p_queue_priorities: queue_priorities.as_ptr(),
             }];
-            let features = instance.get_physical_device_features(*pdevice);
+            let features = instance.get_physical_device_features(pdevice);
             let extensions = [Swapchain::name().as_ptr()];
             let create_info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DeviceCreateInfo,
@@ -194,7 +245,7 @@ impl GraphicsContext {
                 pp_enabled_extension_names: extensions.as_ptr(),
                 p_enabled_features: &features,
             };
-            unsafe { instance.create_device(*pdevice, &create_info, None)? }
+            unsafe { instance.create_device(pdevice, &create_info, None)? }
         };
 
         let graphics_queue =
@@ -206,7 +257,7 @@ impl GraphicsContext {
         };
 
         let surface_formats =
-            surface_loader.get_physical_device_surface_formats_khr(*pdevice, surface)?;
+            surface_loader.get_physical_device_surface_formats_khr(pdevice, surface)?;
         let surface_format = surface_formats
             .iter()
             .map(|f| match (f.format, f.color_space) {
@@ -217,20 +268,22 @@ impl GraphicsContext {
             .unwrap();
 
         let pdevice_surface_caps =
-            surface_loader.get_physical_device_surface_capabilities_khr(*pdevice, surface)?;
+            surface_loader.get_physical_device_surface_capabilities_khr(pdevice, surface)?;
+        let wanted_images = pdevice_surface_caps.min_image_count + 1;
         let image_count = if pdevice_surface_caps.max_image_count > 0
-            && (pdevice_surface_caps.min_image_count + 1) > pdevice_surface_caps.max_image_count
+            && wanted_images > pdevice_surface_caps.max_image_count
         {
             pdevice_surface_caps.max_image_count
         } else {
-            pdevice_surface_caps.min_image_count + 1
+            wanted_images
         };
+        println!("Using {} images.", image_count);
 
         let swapchain_loader =
             Swapchain::new(&instance, &device).expect("Failed to load swapchain extension");
         let swapchain = {
             let present_modes =
-                surface_loader.get_physical_device_surface_present_modes_khr(*pdevice, surface)?;
+                surface_loader.get_physical_device_surface_present_modes_khr(pdevice, surface)?;
             let present_mode = if window_setup.vsync {
                 present_modes
                     .iter()
@@ -364,14 +417,14 @@ impl GraphicsContext {
                 mag_filter: vk::Filter::Linear,
                 min_filter: vk::Filter::Linear,
                 mipmap_mode: vk::SamplerMipmapMode::Linear,
-                address_mode_u: vk::SamplerAddressMode::ClampToEdge,
-                address_mode_v: vk::SamplerAddressMode::ClampToEdge,
-                address_mode_w: vk::SamplerAddressMode::ClampToEdge,
+                address_mode_u: vk::SamplerAddressMode::Repeat,
+                address_mode_v: vk::SamplerAddressMode::Repeat,
+                address_mode_w: vk::SamplerAddressMode::Repeat,
                 mip_lod_bias: 0.0,
                 anisotropy_enable: 0,
                 max_anisotropy: 1.0,
                 compare_enable: 0,
-                compare_op: vk::CompareOp::Never,
+                compare_op: vk::CompareOp::Always,
                 min_lod: 0.0,
                 max_lod: 1.0,
                 border_color: vk::BorderColor::FloatOpaqueWhite,
@@ -788,6 +841,48 @@ impl GraphicsContext {
             vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
         )?;
+        {
+            let buffer_info = vk::DescriptorBufferInfo {
+                buffer: globals_buffer.handle(),
+                offset: 0,
+                range: globals_buffer.memory_requirements.size,
+            };
+            let buffer_write = vk::WriteDescriptorSet {
+                s_type: vk::StructureType::WriteDescriptorSet,
+                p_next: ptr::null(),
+                dst_set: descriptor_set,
+                dst_binding: 0,
+                dst_array_element: 0,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::UniformBuffer,
+                p_image_info: ptr::null(),
+                p_buffer_info: &buffer_info,
+                p_texel_buffer_view: ptr::null(),
+            };
+
+            let image_info = vk::DescriptorImageInfo {
+                image_layout: vk::ImageLayout::General,
+                image_view: white_image.image_view,
+                sampler: default_sampler,
+            };
+            let image_write = vk::WriteDescriptorSet {
+                s_type: vk::StructureType::WriteDescriptorSet,
+                p_next: ptr::null(),
+                dst_set: descriptor_set,
+                dst_binding: 1,
+                dst_array_element: 0,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::CombinedImageSampler,
+                p_image_info: &image_info,
+                p_buffer_info: ptr::null(),
+                p_texel_buffer_view: ptr::null(),
+            };
+
+            unsafe {
+                device.update_descriptor_sets(&[buffer_write, image_write], &[]);
+            }
+        }
+
         let instance_buffer = vulkan::Buffer::empty(
             &device,
             &pdevice_memory_props,
@@ -822,6 +917,8 @@ impl GraphicsContext {
         };
 
         let mut gfx = GraphicsContext {
+            debug_callback,
+            debug_loader,
             globals,
             globals_buffer,
             instance_buffer,
@@ -839,7 +936,7 @@ impl GraphicsContext {
             multisample_samples: 1,
             entry,
             instance,
-            pdevice: *pdevice,
+            pdevice,
             pdevice_memory_props,
             graphics_queue,
             graphics_queue_family_index,
@@ -944,9 +1041,13 @@ impl GraphicsContext {
 
     pub(crate) fn draw(
         &mut self,
-        vertex_buffer: vulkan::Buffer,
-        index_buffer: vulkan::Buffer,
+        vertex_buffer: &vulkan::Buffer,
+        index_buffer: &vulkan::Buffer,
     ) -> GameResult {
+        assert_ne!(vertex_buffer.count(), 0);
+        assert_ne!(index_buffer.count(), 0);
+        assert_ne!(vertex_buffer.handle(), vk::Buffer::null());
+        assert_ne!(index_buffer.handle(), vk::Buffer::null());
         // Set rendering viewport and scissor
         {
             let viewport = vk::Viewport {
@@ -1287,7 +1388,7 @@ impl GraphicsContext {
     /// so it may cause squirrelliness to
     /// happen with canvases or other things that touch it.
     pub(crate) fn resize_viewport(&mut self) {
-        unimplemented!("GraphicsContext::resize_viewport");
+        // unimplemented!("GraphicsContext::resize_viewport");
     }
 
     pub(crate) fn color_format(&self) -> vk::Format {
@@ -1387,6 +1488,8 @@ impl Drop for GraphicsContext {
         }
 
         unsafe {
+            self.debug_loader
+                .destroy_debug_report_callback_ext(self.debug_callback, None);
             self.device.destroy_render_pass(self.render_pass, None);
             self.device
                 .destroy_pipeline_layout(self.graphics_pipeline_layout, None);

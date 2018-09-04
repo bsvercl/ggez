@@ -1,4 +1,4 @@
-use ash::extensions::Surface;
+use ash::extensions::{DebugReport, Surface};
 use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk;
 use std::ptr;
@@ -37,7 +37,11 @@ where
 #[cfg(target_os = "windows")]
 pub fn instance_extension_names() -> Vec<*const i8> {
     use ash::extensions::Win32Surface;
-    vec![Surface::name().as_ptr(), Win32Surface::name().as_ptr()]
+    vec![
+        Surface::name().as_ptr(),
+        Win32Surface::name().as_ptr(),
+        DebugReport::name().as_ptr(),
+    ]
 }
 
 #[cfg(target_os = "macos")]

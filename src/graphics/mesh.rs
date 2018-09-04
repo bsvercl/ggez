@@ -395,81 +395,20 @@ impl MeshBuilder {
     pub fn build(&self, ctx: &mut Context) -> GameResult<Mesh> {
         let gfx = &ctx.gfx_context;
 
-        // The mesh data is static so we'll upload it into device memory
-        let vertex_staging_buffer = vulkan::Buffer::new(
+        // TODO: Staging buffers
+        let vertex_buffer = vulkan::Buffer::new(
             &gfx.device,
             &gfx.pdevice_memory_props,
             &self.buffer.vertices,
-            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         )?;
-        let vertex_buffer = vulkan::Buffer::empty(
-            &gfx.device,
-            &gfx.pdevice_memory_props,
-            vertex_staging_buffer.size(),
-            vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        )?;
-        vulkan::single_time_commands(
-            &gfx.device,
-            gfx.graphics_queue,
-            gfx.command_pool,
-            &[vk::PIPELINE_STAGE_TRANSFER_BIT],
-            &[],
-            &[],
-            |device, command_buffer| {
-                let region = vk::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: vertex_staging_buffer.size(),
-                };
-                unsafe {
-                    device.cmd_copy_buffer(
-                        command_buffer,
-                        vertex_staging_buffer.handle(),
-                        vertex_buffer.handle(),
-                        &[region],
-                    );
-                }
-            },
-        )?;
-
-        let index_staging_buffer = vulkan::Buffer::new(
+        let index_buffer = vulkan::Buffer::new(
             &gfx.device,
             &gfx.pdevice_memory_props,
             &self.buffer.indices,
-            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::BUFFER_USAGE_INDEX_BUFFER_BIT,
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-        )?;
-        let index_buffer = vulkan::Buffer::empty(
-            &gfx.device,
-            &gfx.pdevice_memory_props,
-            vertex_staging_buffer.size(),
-            vk::BUFFER_USAGE_TRANSFER_DST_BIT | vk::BUFFER_USAGE_INDEX_BUFFER_BIT,
-            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        )?;
-        vulkan::single_time_commands(
-            &gfx.device,
-            gfx.graphics_queue,
-            gfx.command_pool,
-            &[vk::PIPELINE_STAGE_TRANSFER_BIT],
-            &[],
-            &[],
-            |device, command_buffer| {
-                let region = vk::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: index_staging_buffer.size(),
-                };
-                unsafe {
-                    device.cmd_copy_buffer(
-                        command_buffer,
-                        index_staging_buffer.handle(),
-                        index_buffer.handle(),
-                        &[region],
-                    );
-                }
-            },
         )?;
 
         Ok(Mesh {
@@ -643,6 +582,11 @@ impl Drawable for Mesh {
     where
         D: Into<DrawTransform>,
     {
+        let param = param.into();
+        self.debug_id.assert(ctx);
+        let gfx = &mut ctx.gfx_context;
+        gfx.update_instance_properties(param)?;
+        gfx.draw(&self.vertex_buffer, &self.index_buffer)?;
         Ok(())
     }
 

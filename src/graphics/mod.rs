@@ -257,7 +257,7 @@ pub fn default_filter(ctx: &Context) -> FilterMode {
 /// It is supposed to be human-readable and will change; do not try to parse
 /// information out of it!
 pub fn renderer_info(ctx: &Context) -> GameResult<String> {
-    unimplemented!("graphics::render_info");
+    Ok(String::new())
 }
 
 /// Returns a rectangle defining the coordinate system of the screen.

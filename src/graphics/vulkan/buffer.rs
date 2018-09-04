@@ -12,9 +12,9 @@ use GameResult;
 pub struct Buffer {
     device: Device<V1_0>,
     pdevice_memory_props: vk::PhysicalDeviceMemoryProperties,
-    buffer: vk::Buffer,
+    pub(crate) buffer: vk::Buffer,
     memory: vk::DeviceMemory,
-    memory_requirements: vk::MemoryRequirements,
+    pub(crate) memory_requirements: vk::MemoryRequirements,
     usage: vk::BufferUsageFlags,
     props: vk::MemoryPropertyFlags,
     count: usize,
@@ -177,7 +177,7 @@ impl Buffer {
         self.memory_requirements.size
     }
 
-    // Returns the number of length of the buffer
+    // Returns the number of elements in the buffer
     pub fn count(&self) -> usize {
         self.count
     }

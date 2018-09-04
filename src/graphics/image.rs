@@ -31,7 +31,7 @@ pub struct Image {
     device: Device<V1_0>,
     image: vk::Image,
     memory: vk::DeviceMemory,
-    image_view: vk::ImageView,
+    pub(crate) image_view: vk::ImageView,
     blend_mode: Option<BlendMode>,
     width: u32,
     height: u32,
@@ -325,7 +325,7 @@ impl Image {
 
     /// Set the filter mode for the image.
     pub fn set_filter(&mut self, mode: FilterMode) {
-        unimplemented!("Image::set_filter");
+        // unimplemented!("Image::set_filter");
     }
 
     /// Returns the dimensions of the image.
