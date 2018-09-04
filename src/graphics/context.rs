@@ -75,7 +75,10 @@ pub(crate) struct GraphicsContext {
     frame_fences: Vec<vk::Fence>,
     current_frame: usize,
     image_count: usize,
+    swapchain_image_index: u32,
+    clear_color: [f32; 4],
     swapchain: vk::SwapchainKHR,
+    swapchain_create_info: vk::SwapchainCreateInfoKHR,
     surface: vk::SurfaceKHR,
     default_sampler: vk::Sampler,
     swapchain_loader: Swapchain,
@@ -822,9 +825,202 @@ impl GraphicsContext {
         Ok(())
     }
 
-    pub(crate) fn begin_frame(&mut self) {}
+    pub(crate) fn draw(
+        &mut self,
+        vertex_buffer: vulkan::Buffer,
+        index_buffer: vulkan::Buffer,
+    ) -> GameResult {
+        // Set rendering viewport and scissor
+        {
+            let viewport = vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: self.screen_rect.w,
+                height: self.screen_rect.h,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            };
+            unsafe {
+                self.device.cmd_set_viewport(
+                    self.command_buffers[self.current_frame],
+                    0,
+                    &[viewport],
+                );
+            }
+            let scissor = vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: vk::Extent2D {
+                    width: self.screen_rect.w as u32,
+                    height: self.screen_rect.h as u32,
+                },
+            };
+            unsafe {
+                self.device.cmd_set_scissor(
+                    self.command_buffers[self.current_frame],
+                    0,
+                    &[scissor],
+                );
+            }
+        }
+        // Do the drawing
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                self.command_buffers[self.current_frame],
+                vk::PipelineBindPoint::Graphics,
+                self.graphics_pipeline,
+            );
+            self.device.cmd_bind_descriptor_sets(
+                self.command_buffers[self.current_frame],
+                vk::PipelineBindPoint::Graphics,
+                self.graphics_pipeline_layout,
+                0,
+                &[self.descriptor_set],
+                &[],
+            );
+            self.device.cmd_bind_vertex_buffers(
+                self.command_buffers[self.current_frame],
+                VERTEX_BUFFER_BINDING_ID,
+                &[vertex_buffer.handle()],
+                &[0],
+            );
+            self.device.cmd_bind_index_buffer(
+                self.command_buffers[self.current_frame],
+                index_buffer.handle(),
+                0,
+                vk::IndexType::Uint16,
+            );
+            self.device.cmd_draw_indexed(
+                self.command_buffers[self.current_frame],
+                index_buffer.count() as u32,
+                self.instance_buffer.count() as u32,
+                0,
+                0,
+                0,
+            );
+        }
+        Ok(())
+    }
 
-    pub(crate) fn end_frame(&mut self) {}
+    pub(crate) fn begin_frame(&mut self) -> GameResult {
+        // Reset frame fence
+        unsafe {
+            self.device
+                .wait_for_fences(&[self.frame_fences[self.current_frame]], true, !0)?;
+            self.device
+                .reset_fences(&[self.frame_fences[self.current_frame]])?;
+        }
+        // Acquire swapchain image
+        let swapchain_image_index = unsafe {
+            self.swapchain_loader.acquire_next_image_khr(
+                self.swapchain,
+                !0,
+                self.image_available_semaphores[self.current_frame],
+                vk::Fence::null(),
+            )?
+        };
+        // Prepare command buffer for recording
+        unsafe {
+            self.device.reset_command_buffer(
+                self.command_buffers[self.current_frame],
+                vk::COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT,
+            )?;
+        }
+        // Begin command buffer recording
+        {
+            let begin_info = vk::CommandBufferBeginInfo {
+                s_type: vk::StructureType::CommandBufferBeginInfo,
+                p_next: ptr::null(),
+                flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+                p_inheritance_info: ptr::null(),
+            };
+            unsafe {
+                self.device
+                    .begin_command_buffer(self.command_buffers[self.current_frame], &begin_info)?;
+            }
+        }
+        // Begin render pass
+        {
+            let clear_values = [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: self.clear_color,
+                },
+            }];
+            let begin_info = vk::RenderPassBeginInfo {
+                s_type: vk::StructureType::RenderPassBeginInfo,
+                p_next: ptr::null(),
+                render_pass: self.render_pass,
+                framebuffer: self.framebuffers[self.swapchain_image_index as usize],
+                render_area: vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: vk::Extent2D {
+                        width: self.screen_rect.w as u32,
+                        height: self.screen_rect.h as u32,
+                    },
+                },
+                clear_value_count: clear_values.len() as u32,
+                p_clear_values: clear_values.as_ptr(),
+            };
+            unsafe {
+                self.device.cmd_begin_render_pass(
+                    self.command_buffers[self.current_frame],
+                    &begin_info,
+                    vk::SubpassContents::Inline,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn end_frame(&mut self) -> GameResult {
+        // End render pass and command buffer
+        unsafe {
+            self.device
+                .cmd_end_render_pass(self.command_buffers[self.current_frame]);
+            self.device
+                .end_command_buffer(self.command_buffers[self.current_frame])?;
+        }
+        // Submit our work to the queue
+        {
+            let submit_info = vk::SubmitInfo {
+                s_type: vk::StructureType::SubmitInfo,
+                p_next: ptr::null(),
+                wait_semaphore_count: 1,
+                p_wait_semaphores: &self.image_available_semaphores[self.current_frame],
+                p_wait_dst_stage_mask: &vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                command_buffer_count: 1,
+                p_command_buffers: &self.command_buffers[self.current_frame],
+                signal_semaphore_count: 1,
+                p_signal_semaphores: &self.rendering_complete_semaphores[self.current_frame],
+            };
+            unsafe {
+                self.device.queue_submit(
+                    self.graphics_queue,
+                    &[submit_info],
+                    self.frame_fences[self.current_frame],
+                )?;
+            }
+        }
+        // Present the image
+        {
+            let present_info = vk::PresentInfoKHR {
+                s_type: vk::StructureType::PresentInfoKhr,
+                p_next: ptr::null(),
+                wait_semaphore_count: 1,
+                p_wait_semaphores: &self.rendering_complete_semaphores[self.current_frame],
+                swapchain_count: 1,
+                p_swapchains: &self.swapchain,
+                p_image_indices: &self.swapchain_image_index,
+                p_results: ptr::null_mut(),
+            };
+            unsafe {
+                self.swapchain_loader
+                    .queue_present_khr(self.graphics_queue, &present_info)?;
+            }
+        }
+        // Advance the frame
+        self.current_frame = (self.current_frame + 1) % self.image_count;
+        Ok(())
+    }
 
     pub(crate) fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult {
         unimplemented!()
