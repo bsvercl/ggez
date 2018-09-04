@@ -90,7 +90,7 @@ impl event::EventHandler for MainState {
             Point2::new(0.0, 0.0),
             100.0,
             4.0,
-            graphics::WHITE
+            graphics::WHITE,
         )?;
         graphics::draw(
             ctx,
@@ -238,16 +238,14 @@ pub fn main() -> GameResult {
     };
 
     let cb = ggez::ContextBuilder::new("graphics_settings", "ggez")
-        .window_mode(conf::WindowMode::default()
-            .fullscreen_type(conf::FullscreenType::Windowed)
-            .resizable(true)
+        .window_mode(
+            conf::WindowMode::default()
+                .fullscreen_type(conf::FullscreenType::Windowed)
+                .resizable(true),
         )
-        .window_setup(conf::WindowSetup::default()
-            .samples(
-                conf::NumSamples::from_u32(msaa)
-                    .expect("Option msaa needs to be 1, 2, 4, 8 or 16!")
-            )
-        )
+        .window_setup(conf::WindowSetup::default().samples(
+            conf::NumSamples::from_u32(msaa).expect("Option msaa needs to be 1, 2, 4, 8 or 16!"),
+        ))
         .add_resource_path(resource_dir);
 
     let (ctx, events_loop) = &mut cb.build()?;
