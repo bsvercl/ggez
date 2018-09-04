@@ -15,7 +15,7 @@ pub fn find_memory_type_index(
         }
         bits >>= 1;
     }
-    unimplemented!()
+    unimplemented!("vulkan::util::find_memory_type_index");
 }
 
 pub fn single_time_commands<D, F>(

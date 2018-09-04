@@ -1127,11 +1127,11 @@ impl GraphicsContext {
     }
 
     pub(crate) fn set_blend_mode(&mut self, mode: BlendMode) -> GameResult {
-        unimplemented!()
+        unimplemented!("GraphicsContext::set_blend_mode");
     }
 
     pub(crate) fn blend_mode(&self) -> BlendMode {
-        unimplemented!()
+        unimplemented!("GraphicsContext::blend_mode");
     }
 
     /// Shortcut function to set the projection matrix to an
@@ -1268,7 +1268,7 @@ impl GraphicsContext {
     /// so it may cause squirrelliness to
     /// happen with canvases or other things that touch it.
     pub(crate) fn resize_viewport(&mut self) {
-        unimplemented!()
+        unimplemented!("GraphicsContext::resize_viewport");
     }
 
     pub(crate) fn color_format(&self) -> vk::Format {

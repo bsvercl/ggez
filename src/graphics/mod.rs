@@ -138,7 +138,7 @@ pub fn present(ctx: &mut Context) -> GameResult {
 /// Take a screenshot by outputting the current render surface
 /// (screen or selected canvas) to a PNG file.
 pub fn screenshot(ctx: &mut Context) -> GameResult<Image> {
-    unimplemented!()
+    unimplemented!("graphics::screenshot");
 }
 
 // TODO: Make all of these take Into<Color>???
@@ -250,14 +250,14 @@ pub fn rectangle(ctx: &mut Context, color: Color, mode: DrawMode, rect: Rect) ->
 
 /// Get the default filter mode for new images.
 pub fn default_filter(ctx: &Context) -> FilterMode {
-    unimplemented!()
+    unimplemented!("graphics::default_filter");
 }
 
 /// Returns a string that tells a little about the obtained rendering mode.
 /// It is supposed to be human-readable and will change; do not try to parse
 /// information out of it!
 pub fn renderer_info(ctx: &Context) -> GameResult<String> {
-    unimplemented!()
+    unimplemented!("graphics::render_info");
 }
 
 /// Returns a rectangle defining the coordinate system of the screen.
@@ -273,7 +273,7 @@ pub fn screen_coordinates(ctx: &Context) -> Rect {
 ///
 /// This does not apply retroactively to already created images.
 pub fn set_default_filter(ctx: &mut Context, mode: FilterMode) {
-    unimplemented!()
+    unimplemented!("graphics::set_default_filter");
 }
 
 /// Sets the bounds of the screen viewport.

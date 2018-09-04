@@ -279,7 +279,7 @@ impl Image {
 
     /// Dumps the `Image`'s data to a `Vec` of `u8` RGBA values.
     pub fn to_rgba8(&self, ctx: &mut Context) -> GameResult<Vec<u8>> {
-        unimplemented!()
+        unimplemented!("Image::to_rgba8");
     }
 
     /// Encode the `Image` to the given file format and
@@ -320,12 +320,12 @@ impl Image {
 
     /// Get the filter mode for the image.
     pub fn filter(&self) -> FilterMode {
-        unimplemented!()
+        unimplemented!("Image::filter");
     }
 
     /// Set the filter mode for the image.
     pub fn set_filter(&mut self, mode: FilterMode) {
-        unimplemented!()
+        unimplemented!("Image::set_filter");
     }
 
     /// Returns the dimensions of the image.
@@ -335,12 +335,12 @@ impl Image {
 
     /// Gets the `Image`'s `WrapMode` along the X and Y axes.
     pub fn wrap(&self) -> (WrapMode, WrapMode) {
-        unimplemented!()
+        unimplemented!("Image::wrap");
     }
 
     /// Sets the `Image`'s `WrapMode` along the X and Y axes.
     pub fn set_wrap(&mut self, wrap_x: WrapMode, wrap_y: WrapMode) {
-        unimplemented!()
+        unimplemented!("Image::set_wrap");
     }
 }
 
