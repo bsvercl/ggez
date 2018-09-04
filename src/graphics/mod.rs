@@ -78,7 +78,7 @@ pub(crate) struct Globals {
     pub mvp: [[f32; 4]; 4],
 }
 
-const QUAD_VERTS: [Vertex; 4] = [
+const QUAD_VERTICES: [Vertex; 4] = [
     Vertex {
         pos: [0.0, 0.0],
         uv: [0.0, 0.0],

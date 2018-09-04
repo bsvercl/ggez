@@ -35,6 +35,8 @@ pub(crate) struct GraphicsContext {
     globals: Globals,
     globals_buffer: vulkan::Buffer,
     instance_buffer: vulkan::Buffer,
+    quad_vertex_buffer: vulkan::Buffer,
+    quad_index_buffer: vulkan::Buffer,
     projection: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     white_image: Image,
@@ -794,6 +796,21 @@ impl GraphicsContext {
             vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
         )?;
 
+        let quad_vertex_buffer = vulkan::Buffer::new(
+            &device,
+            &pdevice_memory_props,
+            &QUAD_VERTICES,
+            vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+        let quad_index_buffer = vulkan::Buffer::new(
+            &device,
+            &pdevice_memory_props,
+            &QUAD_INDICES,
+            vk::BUFFER_USAGE_INDEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+
         let left = 0.0;
         let right = window_mode.width;
         let top = 0.0;
@@ -808,6 +825,8 @@ impl GraphicsContext {
             globals,
             globals_buffer,
             instance_buffer,
+            quad_vertex_buffer,
+            quad_index_buffer,
             projection: initial_projection,
             modelview_stack: vec![initial_transform],
             white_image,
