@@ -33,6 +33,46 @@ impl fmt::Debug for Buffer {
     }
 }
 
+fn create_buffer(
+    device: &Device<V1_0>,
+    pdevice_memory_props: &vk::PhysicalDeviceMemoryProperties,
+    size: vk::DeviceSize,
+    usage: vk::BufferUsageFlags,
+    props: vk::MemoryPropertyFlags,
+) -> GameResult<(vk::Buffer, vk::MemoryRequirements, vk::DeviceMemory)> {
+    let buffer = {
+        let create_info = vk::BufferCreateInfo {
+            s_type: vk::StructureType::BufferCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::BufferCreateFlags::empty(),
+            size,
+            usage,
+            sharing_mode: vk::SharingMode::Exclusive,
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+        };
+        unsafe { device.create_buffer(&create_info, None)? }
+    };
+    let memory_requirements = device.get_buffer_memory_requirements(buffer);
+    let memory = {
+        let allocate_info = vk::MemoryAllocateInfo {
+            s_type: vk::StructureType::MemoryAllocateInfo,
+            p_next: ptr::null(),
+            allocation_size: memory_requirements.size,
+            memory_type_index: vulkan::find_memory_type_index(
+                &memory_requirements,
+                pdevice_memory_props,
+                props,
+            )?,
+        };
+        unsafe { device.allocate_memory(&allocate_info, None)? }
+    };
+    unsafe {
+        device.bind_buffer_memory(buffer, memory, 0)?;
+    }
+    Ok((buffer, memory_requirements, memory))
+}
+
 impl Buffer {
     pub fn empty(
         device: &Device<V1_0>,
@@ -41,36 +81,8 @@ impl Buffer {
         usage: vk::BufferUsageFlags,
         props: vk::MemoryPropertyFlags,
     ) -> GameResult<Self> {
-        let buffer = {
-            let create_info = vk::BufferCreateInfo {
-                s_type: vk::StructureType::BufferCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::BufferCreateFlags::empty(),
-                size,
-                usage,
-                sharing_mode: vk::SharingMode::Exclusive,
-                queue_family_index_count: 0,
-                p_queue_family_indices: ptr::null(),
-            };
-            unsafe { device.create_buffer(&create_info, None)? }
-        };
-        let memory_requirements = device.get_buffer_memory_requirements(buffer);
-        let memory = {
-            let allocate_info = vk::MemoryAllocateInfo {
-                s_type: vk::StructureType::MemoryAllocateInfo,
-                p_next: ptr::null(),
-                allocation_size: memory_requirements.size,
-                memory_type_index: vulkan::find_memory_type_index(
-                    &memory_requirements,
-                    pdevice_memory_props,
-                    props,
-                )?,
-            };
-            unsafe { device.allocate_memory(&allocate_info, None)? }
-        };
-        unsafe {
-            device.bind_buffer_memory(buffer, memory, 0)?;
-        }
+        let (buffer, memory_requirements, memory) =
+            create_buffer(device, pdevice_memory_props, size, usage, props)?;
         Ok(Buffer {
             device: device.clone(),
             pdevice_memory_props: pdevice_memory_props.clone(),
@@ -113,37 +125,16 @@ impl Buffer {
                 self.device.free_memory(self.memory, None);
                 self.device.destroy_buffer(self.buffer, None);
             }
-            // TODO: There has to be a better way to do this
-            self.buffer = {
-                let create_info = vk::BufferCreateInfo {
-                    s_type: vk::StructureType::BufferCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::BufferCreateFlags::empty(),
-                    size: mem::size_of_val(data) as vk::DeviceSize,
-                    usage: self.usage,
-                    sharing_mode: vk::SharingMode::Exclusive,
-                    queue_family_index_count: 0,
-                    p_queue_family_indices: ptr::null(),
-                };
-                unsafe { self.device.create_buffer(&create_info, None)? }
-            };
-            self.memory_requirements = self.device.get_buffer_memory_requirements(self.buffer);
-            self.memory = {
-                let allocate_info = vk::MemoryAllocateInfo {
-                    s_type: vk::StructureType::MemoryAllocateInfo,
-                    p_next: ptr::null(),
-                    allocation_size: self.memory_requirements.size,
-                    memory_type_index: vulkan::find_memory_type_index(
-                        &self.memory_requirements,
-                        &self.pdevice_memory_props,
-                        self.props,
-                    )?,
-                };
-                unsafe { self.device.allocate_memory(&allocate_info, None)? }
-            };
-            unsafe {
-                self.device.bind_buffer_memory(self.buffer, self.memory, 0)?;
-            }
+            let (buffer, memory_requirements, memory) = create_buffer(
+                &self.device,
+                &self.pdevice_memory_props,
+                mem::size_of_val(data) as vk::DeviceSize,
+                self.usage,
+                self.props,
+            )?;
+            self.buffer = buffer;
+            self.memory_requirements = memory_requirements;
+            self.memory = memory;
         }
         self.count = data.len();
         let memory = unsafe {
@@ -178,7 +169,6 @@ impl Buffer {
                 self.device.invalidate_mapped_memory_ranges(&[range])?;
             }
         }
-
         Ok(())
     }
 
