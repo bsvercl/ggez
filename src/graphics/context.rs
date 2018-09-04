@@ -160,10 +160,7 @@ impl GraphicsContext {
             };
 
             let extensions = vulkan::instance_extension_names();
-            let layers = [
-                CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name"),
-                CString::new("VK_LAYER_RENDERDOC_Capture").expect("Wrong name"),
-            ];
+            let layers = [CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name")];
             let layers = layers
                 .iter()
                 .map(|layer| layer.as_ptr())
