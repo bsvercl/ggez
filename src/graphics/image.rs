@@ -102,7 +102,7 @@ impl Image {
             return Err(GameError::ResourceLoadError(msg));
         }
         let buffer = vulkan::Buffer::new(
-            device as _,
+            device,
             pdevice_memory_props,
             rgba,
             vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -125,9 +125,7 @@ impl Image {
                 array_layers: 1,
                 samples: vk::SAMPLE_COUNT_1_BIT,
                 tiling: vk::ImageTiling::Optimal,
-                usage: vk::IMAGE_USAGE_TRANSFER_DST_BIT
-                    | vk::IMAGE_USAGE_STORAGE_BIT
-                    | vk::IMAGE_USAGE_SAMPLED_BIT,
+                usage: vk::IMAGE_USAGE_TRANSFER_DST_BIT | vk::IMAGE_USAGE_SAMPLED_BIT,
                 sharing_mode: vk::SharingMode::Exclusive,
                 queue_family_index_count: 0,
                 p_queue_family_indices: ptr::null(),
