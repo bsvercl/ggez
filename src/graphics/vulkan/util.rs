@@ -128,6 +128,85 @@ pub fn copy_buffer_to_image<D>(
     }
 }
 
+pub fn transition_image_layout<D>(
+    device: &D,
+    command_buffer: vk::CommandBuffer,
+    image: vk::Image,
+    old_layout: vk::ImageLayout,
+    new_layout: vk::ImageLayout,
+) where
+    D: DeviceV1_0,
+{
+    let aspect_mask = match new_layout {
+        vk::ImageLayout::DepthStencilAttachmentOptimal => vk::IMAGE_ASPECT_DEPTH_BIT,
+        _ => vk::IMAGE_ASPECT_COLOR_BIT,
+    };
+    let (src_access_mask, dst_access_mask, src_stage_mask, dst_stage_mask) =
+        match (old_layout, new_layout) {
+            (vk::ImageLayout::Undefined, vk::ImageLayout::Undefined) => (
+                vk::AccessFlags::empty(),
+                vk::ACCESS_TRANSFER_WRITE_BIT,
+                vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            ),
+            (vk::ImageLayout::TransferDstOptimal, vk::ImageLayout::ShaderReadOnlyOptimal) => (
+                vk::ACCESS_TRANSFER_WRITE_BIT,
+                vk::ACCESS_SHADER_READ_BIT,
+                vk::PIPELINE_STAGE_TRANSFER_BIT,
+                vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            ),
+            (vk::ImageLayout::Undefined, vk::ImageLayout::DepthStencilAttachmentOptimal) => (
+                vk::AccessFlags::empty(),
+                vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                    | vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                vk::PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            ),
+            (vk::ImageLayout::Undefined, vk::ImageLayout::ColorAttachmentOptimal) => (
+                vk::AccessFlags::empty(),
+                vk::ACCESS_COLOR_ATTACHMENT_READ_BIT | vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            ),
+            (vk::ImageLayout::Undefined, vk::ImageLayout::TransferDstOptimal) => (
+                vk::AccessFlags::empty(),
+                vk::ACCESS_TRANSFER_WRITE_BIT,
+                vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                vk::PIPELINE_STAGE_TRANSFER_BIT,
+            ),
+            _ => unimplemented!("transition_image_layout"),
+        };
+    let image_memory_barrier = vk::ImageMemoryBarrier {
+        s_type: vk::StructureType::ImageMemoryBarrier,
+        p_next: ptr::null(),
+        src_access_mask,
+        dst_access_mask,
+        old_layout,
+        new_layout,
+        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
+        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
+        image: image,
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: aspect_mask,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+    };
+    unsafe {
+        device.cmd_pipeline_barrier(
+            command_buffer,
+            src_stage_mask,
+            dst_stage_mask,
+            vk::DependencyFlags::empty(),
+            &[],
+            &[],
+            &[image_memory_barrier],
+        );
+    }
+}
+
 pub fn create_shader_module<D>(device: &D, bytes: &[u8]) -> GameResult<vk::ShaderModule>
 where
     D: DeviceV1_0,

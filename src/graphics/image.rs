@@ -158,61 +158,28 @@ impl Image {
             &[],
             &[],
             |device, command_buffer| {
-                let barrier = vk::ImageMemoryBarrier {
-                    s_type: vk::StructureType::ImageMemoryBarrier,
-                    p_next: ptr::null(),
-                    src_access_mask: vk::AccessFlags::empty(),
-                    dst_access_mask: vk::ACCESS_TRANSFER_WRITE_BIT,
-                    old_layout: vk::ImageLayout::Undefined,
-                    new_layout: vk::ImageLayout::General,
-                    src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
-                    dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED,
+                vulkan::transition_image_layout(
+                    device,
+                    command_buffer,
                     image,
-                    subresource_range: vk::ImageSubresourceRange {
-                        aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    },
-                };
-                unsafe {
-                    device.cmd_pipeline_barrier(
-                        command_buffer,
-                        vk::PIPELINE_STAGE_TRANSFER_BIT,
-                        vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        vk::DependencyFlags::empty(),
-                        &[],
-                        &[],
-                        &[barrier],
-                    );
-                }
-                let region = vk::BufferImageCopy {
-                    buffer_offset: 0,
-                    buffer_row_length: 0,
-                    buffer_image_height: 0,
-                    image_subresource: vk::ImageSubresourceLayers {
-                        aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-                        mip_level: 0,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    },
-                    image_offset: vk::Offset3D { x: 0, y: 0, z: 0 },
-                    image_extent: vk::Extent3D {
-                        width,
-                        height,
-                        depth: 1,
-                    },
-                };
-                unsafe {
-                    device.cmd_copy_buffer_to_image(
-                        command_buffer,
-                        buffer.handle(),
-                        image,
-                        vk::ImageLayout::General,
-                        &[region],
-                    );
-                }
+                    vk::ImageLayout::Undefined,
+                    vk::ImageLayout::TransferDstOptimal,
+                );
+                vulkan::copy_buffer_to_image(
+                    device,
+                    command_buffer,
+                    buffer.handle(),
+                    image,
+                    width,
+                    height,
+                );
+                vulkan::transition_image_layout(
+                    device,
+                    command_buffer,
+                    image,
+                    vk::ImageLayout::TransferDstOptimal,
+                    vk::ImageLayout::ShaderReadOnlyOptimal,
+                );
             },
         )?;
         let image_view = {
