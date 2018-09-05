@@ -282,14 +282,14 @@ impl GraphicsContext {
                 present_modes
                     .iter()
                     .cloned()
-                    .find(|&pm| pm == vk::PresentModeKHR::Fifo)
-                    .unwrap()
+                    .find(|&pm| pm == vk::PresentModeKHR::Mailbox)
+                    .unwrap_or(vk::PresentModeKHR::Fifo)
             } else {
                 present_modes
                     .iter()
                     .cloned()
-                    .find(|&pm| pm == vk::PresentModeKHR::Mailbox)
-                    .unwrap_or(vk::PresentModeKHR::Immediate)
+                    .find(|&pm| pm == vk::PresentModeKHR::Immediate)
+                    .unwrap_or(vk::PresentModeKHR::Fifo)
             };
 
             let create_info = vk::SwapchainCreateInfoKHR {
