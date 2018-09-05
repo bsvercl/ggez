@@ -573,7 +573,7 @@ impl Mesh {
     where
         V: Into<Vertex> + Clone,
     {
-        unimplemented!("Image::from_raw");
+        unimplemented!("Mesh::from_raw");
     }
 }
 
