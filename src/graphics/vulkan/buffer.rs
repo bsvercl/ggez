@@ -134,7 +134,6 @@ where
 
     pub fn update(&mut self, data: &[T]) -> GameResult {
         if data.len() != self.count {
-            println!("Resizing buffer. From {} to {}.", self.count, data.len());
             unsafe {
                 self.device.free_memory(self.memory, None);
                 self.device.destroy_buffer(self.buffer, None);
