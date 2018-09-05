@@ -31,7 +31,11 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         // This should be good enough
-        self.buffer == other.buffer && self.memory == other.memory && self.count == other.count
+        self.buffer == other.buffer
+            && self.memory == other.memory
+            && self.usage == other.usage
+            && self.props == other.props
+            && self.count == other.count
     }
 }
 
