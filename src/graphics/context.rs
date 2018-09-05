@@ -21,6 +21,9 @@ use GameResult;
 const VERTEX_BUFFER_BINDING_ID: u32 = 0;
 const INSTANCE_BUFFER_BINDING_ID: u32 = 1;
 
+const UNIFORM_BUFFER_BINDING_ID: u32 = 0;
+const COMBINED_IMAGE_SAMPLER_BINDING_ID: u32 = 1;
+
 macro_rules! offset_of {
     ($base:path, $field:ident) => {{
         #[allow(unused_unsafe)]
@@ -63,8 +66,8 @@ pub(crate) struct GraphicsContext {
     globals: Globals,
     globals_buffer: vulkan::Buffer<Globals>,
     instance_buffer: vulkan::Buffer<InstanceProperties>,
-    quad_vertex_buffer: vulkan::Buffer<Vertex>,
-    quad_index_buffer: vulkan::Buffer<u16>,
+    pub(crate) quad_vertex_buffer: vulkan::Buffer<Vertex>,
+    pub(crate) quad_index_buffer: vulkan::Buffer<u16>,
     projection: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     white_image: Image,
@@ -153,10 +156,7 @@ impl GraphicsContext {
             };
 
             let extensions = vulkan::instance_extension_names();
-            let layers = [
-                CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name"),
-                CString::new("VK_LAYER_RENDERDOC_Capture").expect("Wrong name"),
-            ];
+            let layers = [CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name")];
             let layers = layers
                 .iter()
                 .map(|layer| layer.as_ptr())
@@ -224,7 +224,6 @@ impl GraphicsContext {
                 queue_count: queue_priorities.len() as u32,
                 p_queue_priorities: queue_priorities.as_ptr(),
             }];
-            let features = instance.get_physical_device_features(pdevice);
             let extensions = [Swapchain::name().as_ptr()];
             let create_info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DeviceCreateInfo,
@@ -236,7 +235,7 @@ impl GraphicsContext {
                 pp_enabled_layer_names: ptr::null(),
                 enabled_extension_count: extensions.len() as u32,
                 pp_enabled_extension_names: extensions.as_ptr(),
-                p_enabled_features: &features,
+                p_enabled_features: ptr::null(),
             };
             unsafe { instance.create_device(pdevice, &create_info, None)? }
         };
@@ -248,6 +247,7 @@ impl GraphicsContext {
             width: window_mode.width as u32,
             height: window_mode.height as u32,
         };
+        println!("Using surface resolution: {:?}", surface_resolution);
 
         let surface_formats =
             surface_loader.get_physical_device_surface_formats_khr(pdevice, surface)?;
@@ -259,6 +259,7 @@ impl GraphicsContext {
             })
             .next()
             .unwrap();
+        println!("Using surface format: {:?}", surface_format);
 
         let pdevice_surface_caps =
             surface_loader.get_physical_device_surface_capabilities_khr(pdevice, surface)?;
@@ -451,14 +452,14 @@ impl GraphicsContext {
         let descriptor_set_layout = {
             let bindings = [
                 vk::DescriptorSetLayoutBinding {
-                    binding: 0,
+                    binding: UNIFORM_BUFFER_BINDING_ID,
                     descriptor_type: vk::DescriptorType::UniformBuffer,
                     descriptor_count: 1,
                     stage_flags: vk::SHADER_STAGE_VERTEX_BIT,
                     p_immutable_samplers: ptr::null(),
                 },
                 vk::DescriptorSetLayoutBinding {
-                    binding: 1,
+                    binding: COMBINED_IMAGE_SAMPLER_BINDING_ID,
                     descriptor_type: vk::DescriptorType::CombinedImageSampler,
                     descriptor_count: 1,
                     stage_flags: vk::SHADER_STAGE_FRAGMENT_BIT,
@@ -556,11 +557,6 @@ impl GraphicsContext {
                 unsafe { device.create_framebuffer(&create_info, None).unwrap() }
             })
             .collect::<Vec<_>>();
-
-        println!(
-            "Surface resolution: {}x{}",
-            surface_resolution.width, surface_resolution.height
-        );
 
         let graphics_pipeline_layout = {
             let create_info = vk::PipelineLayoutCreateInfo {
@@ -857,7 +853,7 @@ impl GraphicsContext {
                     s_type: vk::StructureType::WriteDescriptorSet,
                     p_next: ptr::null(),
                     dst_set: descriptor_set,
-                    dst_binding: 0,
+                    dst_binding: UNIFORM_BUFFER_BINDING_ID,
                     dst_array_element: 0,
                     descriptor_count: 1,
                     descriptor_type: vk::DescriptorType::UniformBuffer,
@@ -869,7 +865,7 @@ impl GraphicsContext {
                     s_type: vk::StructureType::WriteDescriptorSet,
                     p_next: ptr::null(),
                     dst_set: descriptor_set,
-                    dst_binding: 1,
+                    dst_binding: COMBINED_IMAGE_SAMPLER_BINDING_ID,
                     dst_array_element: 0,
                     descriptor_count: 1,
                     descriptor_type: vk::DescriptorType::CombinedImageSampler,
@@ -908,9 +904,9 @@ impl GraphicsContext {
         )?;
 
         let left = 0.0;
-        let right = window_mode.width;
+        let right = surface_resolution.width as f32;
         let top = 0.0;
-        let bottom = window_mode.height;
+        let bottom = surface_resolution.height as f32;
         let initial_projection = Matrix4::identity();
         let initial_transform = Matrix4::identity();
         let globals = Globals {
@@ -968,13 +964,13 @@ impl GraphicsContext {
         };
         gfx.set_window_mode(window_mode)?;
 
-        let w = window_mode.width;
-        let h = window_mode.height;
+        let w = surface_resolution.width;
+        let h = surface_resolution.height;
         let rect = Rect {
             x: 0.0,
             y: 0.0,
-            w,
-            h,
+            w: w as f32,
+            h: h as f32,
         };
         gfx.set_projection_rect(rect);
         gfx.calculate_transform_matrix();
@@ -1301,8 +1297,8 @@ impl GraphicsContext {
             rect.x + rect.w,
             rect.y,
             rect.y + rect.h,
-            1024.0,
-            0.1,
+            -1.0,
+            1.0,
         ));
     }
 
