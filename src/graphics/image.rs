@@ -324,7 +324,7 @@ impl Drawable for Image {
     where
         D: Into<DrawTransform>,
     {
-        Ok(())
+        unimplemented!("Image::draw");
     }
 
     fn set_blend_mode(&mut self, mode: Option<BlendMode>) {
