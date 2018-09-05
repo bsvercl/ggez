@@ -193,7 +193,7 @@ impl Image {
                     buffer_image_height: 0,
                     image_subresource: vk::ImageSubresourceLayers {
                         aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-                        mip_level: 1,
+                        mip_level: 0,
                         base_array_layer: 0,
                         layer_count: 1,
                     },
