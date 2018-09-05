@@ -560,6 +560,7 @@ impl Mesh {
         mb.build(ctx)
     }
 
+    // TODO: Update docs
     /// Creates a `Mesh` from a raw list of triangles defined from points
     /// and indices, with the given UV texture coordinates.
     ///
@@ -569,11 +570,34 @@ impl Mesh {
     /// cause drawing to panic), if:
     ///
     ///  * `indices` contains a value out of bounds of `verts`
-    pub fn from_raw<V>(ctx: &mut Context, verts: &[V], indices: &[u16]) -> Mesh
+    pub fn from_raw<V>(ctx: &mut Context, verts: &[V], indices: &[u16]) -> GameResult<Mesh>
     where
         V: Into<Vertex> + Clone,
     {
-        unimplemented!("Mesh::from_raw");
+        let verts = verts.iter().cloned().map(|v| v.into()).collect::<Vec<_>>();
+        let gfx = &ctx.gfx_context;
+        // TODO: Staging buffers
+        let vertex_buffer = vulkan::Buffer::new(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            &verts,
+            vk::BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+        let index_buffer = vulkan::Buffer::new(
+            &gfx.device,
+            &gfx.pdevice_memory_props,
+            &indices,
+            vk::BUFFER_USAGE_INDEX_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+
+        Ok(Mesh {
+            vertex_buffer,
+            index_buffer,
+            blend_mode: None,
+            debug_id: DebugId::get(ctx),
+        })
     }
 }
 
