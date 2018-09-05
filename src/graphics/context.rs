@@ -61,10 +61,10 @@ unsafe extern "system" fn vulkan_debug_callback(
 
 pub(crate) struct GraphicsContext {
     globals: Globals,
-    globals_buffer: vulkan::Buffer,
-    instance_buffer: vulkan::Buffer,
-    quad_vertex_buffer: vulkan::Buffer,
-    quad_index_buffer: vulkan::Buffer,
+    globals_buffer: vulkan::Buffer<Globals>,
+    instance_buffer: vulkan::Buffer<InstanceProperties>,
+    quad_vertex_buffer: vulkan::Buffer<Vertex>,
+    quad_index_buffer: vulkan::Buffer<u16>,
     projection: Matrix4,
     pub(crate) modelview_stack: Vec<Matrix4>,
     white_image: Image,
@@ -1041,8 +1041,8 @@ impl GraphicsContext {
 
     pub(crate) fn draw(
         &mut self,
-        vertex_buffer: &vulkan::Buffer,
-        index_buffer: &vulkan::Buffer,
+        vertex_buffer: &vulkan::Buffer<Vertex>,
+        index_buffer: &vulkan::Buffer<u16>,
     ) -> GameResult {
         // Set rendering viewport and scissor
         {

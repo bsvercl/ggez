@@ -4,12 +4,16 @@ use ash::vk;
 use ash::Device;
 use graphics::vulkan;
 use std::fmt;
+use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
 use GameResult;
 
 #[derive(Clone)]
-pub struct Buffer {
+pub struct Buffer<T>
+where
+    T: Copy,
+{
     device: Device<V1_0>,
     pdevice_memory_props: vk::PhysicalDeviceMemoryProperties,
     pub(crate) buffer: vk::Buffer,
@@ -18,16 +22,23 @@ pub struct Buffer {
     usage: vk::BufferUsageFlags,
     props: vk::MemoryPropertyFlags,
     count: usize,
+    _phantom: PhantomData<T>,
 }
 
-impl PartialEq for Buffer {
-    fn eq(&self, other: &Buffer) -> bool {
+impl<T> PartialEq for Buffer<T>
+where
+    T: Copy,
+{
+    fn eq(&self, other: &Self) -> bool {
         // This should be good enough
         self.buffer == other.buffer && self.memory == other.memory && self.count == other.count
     }
 }
 
-impl fmt::Debug for Buffer {
+impl<T> fmt::Debug for Buffer<T>
+where
+    T: Copy,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "TODO")
     }
@@ -73,7 +84,10 @@ fn create_buffer(
     Ok((buffer, memory_requirements, memory))
 }
 
-impl Buffer {
+impl<T> Buffer<T>
+where
+    T: Copy,
+{
     pub fn empty(
         device: &Device<V1_0>,
         pdevice_memory_props: &vk::PhysicalDeviceMemoryProperties,
@@ -92,19 +106,17 @@ impl Buffer {
             usage,
             props,
             count: 0,
+            _phantom: PhantomData {},
         })
     }
 
-    pub fn new<T>(
+    pub fn new(
         device: &Device<V1_0>,
         pdevice_memory_props: &vk::PhysicalDeviceMemoryProperties,
         data: &[T],
         usage: vk::BufferUsageFlags,
         props: vk::MemoryPropertyFlags,
-    ) -> GameResult<Self>
-    where
-        T: Copy,
-    {
+    ) -> GameResult<Self> {
         let mut buffer = Buffer::empty(
             device,
             pdevice_memory_props,
@@ -116,11 +128,9 @@ impl Buffer {
         Ok(buffer)
     }
 
-    pub fn update<T>(&mut self, data: &[T]) -> GameResult
-    where
-        T: Copy,
-    {
-        if data.len() > self.count {
+    pub fn update(&mut self, data: &[T]) -> GameResult {
+        if data.len() != self.count {
+            println!("Resizing buffer. From {} to {}.", self.count, data.len());
             unsafe {
                 self.device.free_memory(self.memory, None);
                 self.device.destroy_buffer(self.buffer, None);
@@ -187,7 +197,10 @@ impl Buffer {
     }
 }
 
-impl Drop for Buffer {
+impl<T> Drop for Buffer<T>
+where
+    T: Copy,
+{
     fn drop(&mut self) {
         unsafe {
             self.device.free_memory(self.memory, None);

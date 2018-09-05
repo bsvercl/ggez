@@ -451,8 +451,8 @@ impl t::VertexConstructor<t::StrokeVertex, Vertex> for VertexBuilder {
 /// via a `MeshBuilder`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Mesh {
-    vertex_buffer: vulkan::Buffer,
-    index_buffer: vulkan::Buffer,
+    vertex_buffer: vulkan::Buffer<Vertex>,
+    index_buffer: vulkan::Buffer<u16>,
     blend_mode: Option<BlendMode>,
     debug_id: DebugId,
 }
