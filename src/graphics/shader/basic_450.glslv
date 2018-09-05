@@ -19,6 +19,10 @@ layout(location = 8) in vec4 a_Color;
 layout(location = 0) out vec2 v_Uv;
 layout(location = 1) out vec4 v_Color;
 
+out gl_PerVertex {
+    vec4 gl_Position;
+};
+
 void main() {
     v_Uv = a_Uv * a_Src.zw + a_Src.xy;
     v_Color = a_Color * a_VertColor;
