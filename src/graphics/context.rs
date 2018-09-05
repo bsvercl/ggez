@@ -617,13 +617,13 @@ impl GraphicsContext {
 
             let vertex_binding_descriptions = [
                 vk::VertexInputBindingDescription {
-                    binding: 0,
-                    stride: mem::align_of::<Vertex>() as u32,
+                    binding: VERTEX_BUFFER_BINDING_ID,
+                    stride: mem::size_of::<Vertex>() as u32,
                     input_rate: vk::VertexInputRate::Vertex,
                 },
                 vk::VertexInputBindingDescription {
-                    binding: 1,
-                    stride: mem::align_of::<InstanceProperties>() as u32,
+                    binding: INSTANCE_BUFFER_BINDING_ID,
+                    stride: mem::size_of::<InstanceProperties>() as u32,
                     input_rate: vk::VertexInputRate::Instance,
                 },
             ];
