@@ -760,12 +760,12 @@ impl GraphicsContext {
             };
 
             let attachments = [vk::PipelineColorBlendAttachmentState {
-                blend_enable: 0,
-                src_color_blend_factor: vk::BlendFactor::ConstantAlpha,
-                dst_color_blend_factor: vk::BlendFactor::ConstantAlpha,
+                blend_enable: 1,
+                src_color_blend_factor: vk::BlendFactor::SrcAlpha,
+                dst_color_blend_factor: vk::BlendFactor::OneMinusSrcAlpha,
                 color_blend_op: vk::BlendOp::Add,
-                src_alpha_blend_factor: vk::BlendFactor::ConstantAlpha,
-                dst_alpha_blend_factor: vk::BlendFactor::ConstantAlpha,
+                src_alpha_blend_factor: vk::BlendFactor::SrcAlpha,
+                dst_alpha_blend_factor: vk::BlendFactor::OneMinusSrcAlpha,
                 alpha_blend_op: vk::BlendOp::Add,
                 color_write_mask: vk::COLOR_COMPONENT_R_BIT
                     | vk::COLOR_COMPONENT_G_BIT
@@ -780,7 +780,7 @@ impl GraphicsContext {
                 logic_op: vk::LogicOp::Clear,
                 attachment_count: attachments.len() as u32,
                 p_attachments: attachments.as_ptr(),
-                blend_constants: [0.0; 4],
+                blend_constants: [0.0, 0.0, 0.0, 0.0],
             };
 
             let create_info = vk::GraphicsPipelineCreateInfo {
