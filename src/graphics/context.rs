@@ -70,7 +70,6 @@ pub(crate) struct GraphicsContext {
     white_image: Image,
     pub(crate) screen_rect: Rect,
     color_format: vk::Format,
-    // depth_format: vk::Format,
     srgb: bool,
     pub(crate) hidpi_factor: f32,
     pub(crate) os_hidpi_factor: f32,
@@ -94,12 +93,6 @@ pub(crate) struct GraphicsContext {
     swapchain: vk::SwapchainKHR,
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
-    // color_images: Vec<vk::Image>,
-    // color_image_memories: Vec<vk::DeviceMemory>,
-    // color_image_views: Vec<vk::ImageView>,
-    // depth_images: Vec<vk::Image>,
-    // depth_image_memories: Vec<vk::DeviceMemory>,
-    // depth_image_views: Vec<vk::ImageView>,
     pub(crate) command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -160,7 +153,10 @@ impl GraphicsContext {
             };
 
             let extensions = vulkan::instance_extension_names();
-            let layers = [CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name")];
+            let layers = [
+                CString::new("VK_LAYER_LUNARG_standard_validation").expect("Wrong name"),
+                CString::new("VK_LAYER_RENDERDOC_Capture").expect("Wrong name"),
+            ];
             let layers = layers
                 .iter()
                 .map(|layer| layer.as_ptr())
@@ -561,6 +557,11 @@ impl GraphicsContext {
             })
             .collect::<Vec<_>>();
 
+        println!(
+            "Surface resolution: {}x{}",
+            surface_resolution.width, surface_resolution.height
+        );
+
         let graphics_pipeline_layout = {
             let create_info = vk::PipelineLayoutCreateInfo {
                 s_type: vk::StructureType::PipelineLayoutCreateInfo,
@@ -729,10 +730,10 @@ impl GraphicsContext {
                 s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                depth_clamp_enable: 1,
-                rasterizer_discard_enable: 1,
+                depth_clamp_enable: 0,
+                rasterizer_discard_enable: 0,
                 polygon_mode: vk::PolygonMode::Fill,
-                cull_mode: vk::CULL_MODE_BACK_BIT,
+                cull_mode: vk::CULL_MODE_NONE,
                 front_face: vk::FrontFace::Clockwise,
                 depth_bias_enable: 0,
                 depth_bias_constant_factor: 0.0,
@@ -772,7 +773,7 @@ impl GraphicsContext {
                 alpha_blend_op: vk::BlendOp::Add,
                 color_write_mask: vk::COLOR_COMPONENT_R_BIT
                     | vk::COLOR_COMPONENT_G_BIT
-                    | vk::COLOR_COMPONENT_G_BIT
+                    | vk::COLOR_COMPONENT_B_BIT
                     | vk::COLOR_COMPONENT_A_BIT,
             }];
             let color_blend_state = vk::PipelineColorBlendStateCreateInfo {
@@ -819,6 +820,14 @@ impl GraphicsContext {
             graphics_pipeline
         };
 
+        let globals_buffer = vulkan::Buffer::empty(
+            &device,
+            &pdevice_memory_props,
+            mem::size_of::<Globals>() as vk::DeviceSize,
+            vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        )?;
+
         let white_image = Image::make_raw(
             &device,
             &pdevice_memory_props,
@@ -831,52 +840,47 @@ impl GraphicsContext {
             debug_id,
         )?;
 
-        let globals_buffer = vulkan::Buffer::empty(
-            &device,
-            &pdevice_memory_props,
-            mem::size_of::<Globals>() as vk::DeviceSize,
-            vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT | vk::MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        )?;
         {
             let buffer_info = vk::DescriptorBufferInfo {
                 buffer: globals_buffer.handle(),
                 offset: 0,
-                range: globals_buffer.memory_requirements.size,
+                range: globals_buffer.size(),
             };
-            let buffer_write = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WriteDescriptorSet,
-                p_next: ptr::null(),
-                dst_set: descriptor_set,
-                dst_binding: 0,
-                dst_array_element: 0,
-                descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::UniformBuffer,
-                p_image_info: ptr::null(),
-                p_buffer_info: &buffer_info,
-                p_texel_buffer_view: ptr::null(),
-            };
-
             let image_info = vk::DescriptorImageInfo {
                 image_layout: vk::ImageLayout::General,
                 image_view: white_image.image_view,
                 sampler: default_sampler,
             };
-            let image_write = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WriteDescriptorSet,
-                p_next: ptr::null(),
-                dst_set: descriptor_set,
-                dst_binding: 1,
-                dst_array_element: 0,
-                descriptor_count: 1,
-                descriptor_type: vk::DescriptorType::CombinedImageSampler,
-                p_image_info: &image_info,
-                p_buffer_info: ptr::null(),
-                p_texel_buffer_view: ptr::null(),
-            };
+
+            let writes = [
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WriteDescriptorSet,
+                    p_next: ptr::null(),
+                    dst_set: descriptor_set,
+                    dst_binding: 0,
+                    dst_array_element: 0,
+                    descriptor_count: 1,
+                    descriptor_type: vk::DescriptorType::UniformBuffer,
+                    p_image_info: ptr::null(),
+                    p_buffer_info: &buffer_info,
+                    p_texel_buffer_view: ptr::null(),
+                },
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WriteDescriptorSet,
+                    p_next: ptr::null(),
+                    dst_set: descriptor_set,
+                    dst_binding: 1,
+                    dst_array_element: 0,
+                    descriptor_count: 1,
+                    descriptor_type: vk::DescriptorType::CombinedImageSampler,
+                    p_image_info: &image_info,
+                    p_buffer_info: ptr::null(),
+                    p_texel_buffer_view: ptr::null(),
+                },
+            ];
 
             unsafe {
-                device.update_descriptor_sets(&[buffer_write, image_write], &[]);
+                device.update_descriptor_sets(&writes, &[]);
             }
         }
 
@@ -1032,8 +1036,7 @@ impl GraphicsContext {
         let mut new_draw_params = draw_params;
         new_draw_params.color = draw_params.color;
         let properties = new_draw_params.to_instance_properties(self.srgb);
-        self.instance_buffer.update(&[properties])?;
-        Ok(())
+        self.instance_buffer.update(&[properties])
     }
 
     pub(crate) fn draw(
@@ -1041,10 +1044,6 @@ impl GraphicsContext {
         vertex_buffer: &vulkan::Buffer,
         index_buffer: &vulkan::Buffer,
     ) -> GameResult {
-        assert_ne!(vertex_buffer.count(), 0);
-        assert_ne!(index_buffer.count(), 0);
-        assert_ne!(vertex_buffer.handle(), vk::Buffer::null());
-        assert_ne!(index_buffer.handle(), vk::Buffer::null());
         // Set rendering viewport and scissor
         {
             let viewport = vk::Viewport {
@@ -1302,8 +1301,8 @@ impl GraphicsContext {
             rect.x + rect.w,
             rect.y,
             rect.y + rect.h,
-            -1.0,
-            1.0,
+            1024.0,
+            0.1,
         ));
     }
 
@@ -1429,38 +1428,6 @@ impl Drop for GraphicsContext {
                 self.device.destroy_image_view(image_view, None);
             }
         }
-
-        // for memory in &self.color_image_memories {
-        //     unsafe {
-        //         self.device.free_memory(memory, None);
-        //     }
-        // }
-        // for image_view in &self.color_image_views {
-        //     unsafe {
-        //         self.device.destroy_image_view(image_view, None);
-        //     }
-        // }
-        // for image in &self.color_images {
-        //     unsafe {
-        //         self.device.destroy_image(image, None);
-        //     }
-        // }
-
-        // for memory in &self.depth_image_memories {
-        //     unsafe {
-        //         self.device.free_memory(memory, None);
-        //     }
-        // }
-        // for image_view in &self.depth_image_views {
-        //     unsafe {
-        //         self.device.destroy_image_view(image_view, None);
-        //     }
-        // }
-        // for image in &self.depth_images {
-        //     unsafe {
-        //         self.device.destroy_image(image, None);
-        //     }
-        // }
 
         for &semaphore in &self.image_available_semaphores {
             unsafe {
