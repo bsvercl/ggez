@@ -150,7 +150,7 @@ impl GraphicsContext {
                 p_application_name: application_name.as_ptr(),
                 application_version: 1,
                 p_engine_name: engine_name.as_ptr(),
-                engine_version: 1,
+                engine_version: vk_make_version!(0, 5, 0),
                 // VK_API_VERSION_1_0
                 api_version: vk_make_version!(1, 0, 0),
             };
@@ -280,21 +280,19 @@ impl GraphicsContext {
         let swapchain_loader =
             Swapchain::new(&instance, &device).expect("Failed to load swapchain extension");
         let swapchain = {
-            let present_modes =
-                surface_loader.get_physical_device_surface_present_modes_khr(pdevice, surface)?;
-            let present_mode = if window_setup.vsync {
-                present_modes
-                    .iter()
-                    .cloned()
-                    .find(|&pm| pm == vk::PresentModeKHR::Mailbox)
-                    .unwrap_or(vk::PresentModeKHR::Fifo)
-            } else {
-                present_modes
-                    .iter()
-                    .cloned()
-                    .find(|&pm| pm == vk::PresentModeKHR::Immediate)
-                    .unwrap_or(vk::PresentModeKHR::Fifo)
-            };
+            let present_mode = surface_loader
+                .get_physical_device_surface_present_modes_khr(pdevice, surface)?
+                .iter()
+                .cloned()
+                .find(|&pm| {
+                    if window_setup.vsync {
+                        pm == vk::PresentModeKHR::Mailbox
+                    } else {
+                        pm == vk::PresentModeKHR::Immediate
+                    }
+                })
+                .unwrap_or(vk::PresentModeKHR::Fifo);
+            println!("Using present mode: {:?}", present_mode);
 
             let create_info = vk::SwapchainCreateInfoKHR {
                 s_type: vk::StructureType::SwapchainCreateInfoKhr,
