@@ -255,8 +255,11 @@ impl GraphicsContext {
             .iter()
             // TODO: Srgb based on whether it's requested or not
             .max_by_key(|f| match f.format {
-                vk::Format::R8g8b8a8Srgb => 2,
-                vk::Format::R8g8b8a8Snorm => 1,
+                vk::Format::R8g8b8a8Srgb if window_setup.srgb => 5,
+                vk::Format::R8g8b8a8Snorm => 4,
+                vk::Format::R8g8b8a8Sint => 3,
+                vk::Format::R8g8b8a8Unorm => 2 ,
+                vk::Format::R8g8b8a8Uint => 1,
                 _ => 0,
             })
             .unwrap();
