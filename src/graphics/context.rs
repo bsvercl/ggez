@@ -1041,45 +1041,7 @@ impl GraphicsContext {
         vertex_buffer: &vulkan::Buffer<Vertex>,
         index_buffer: &vulkan::Buffer<u16>,
     ) -> GameResult {
-        // Set rendering viewport and scissor
-        {
-            let viewport = vk::Viewport {
-                x: 0.0,
-                y: 0.0,
-                width: self.screen_rect.w,
-                height: self.screen_rect.h,
-                min_depth: 0.0,
-                max_depth: 1.0,
-            };
             unsafe {
-                self.device.cmd_set_viewport(
-                    self.command_buffers[self.current_frame],
-                    0,
-                    &[viewport],
-                );
-            }
-            let scissor = vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent: vk::Extent2D {
-                    width: self.screen_rect.w as u32,
-                    height: self.screen_rect.h as u32,
-                },
-            };
-            unsafe {
-                self.device.cmd_set_scissor(
-                    self.command_buffers[self.current_frame],
-                    0,
-                    &[scissor],
-                );
-            }
-        }
-        // Do the drawing
-        unsafe {
-            self.device.cmd_bind_pipeline(
-                self.command_buffers[self.current_frame],
-                vk::PipelineBindPoint::Graphics,
-                self.graphics_pipeline,
-            );
             self.device.cmd_bind_descriptor_sets(
                 self.command_buffers[self.current_frame],
                 vk::PipelineBindPoint::Graphics,
@@ -1119,7 +1081,7 @@ impl GraphicsContext {
     }
 
     pub(crate) fn begin_frame(&mut self) -> GameResult {
-        // Reset frame fence
+        // Wait on and reset frame fence
         unsafe {
             self.device
                 .wait_for_fences(&[self.frame_fences[self.current_frame]], true, !0)?;
@@ -1184,6 +1146,46 @@ impl GraphicsContext {
                     vk::SubpassContents::Inline,
                 );
             }
+        }
+        // Set rendering viewport and scissor
+        {
+            let viewport = vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: self.screen_rect.w,
+                height: self.screen_rect.h,
+                min_depth: 0.0,
+                max_depth: 1.0,
+            };
+            unsafe {
+                self.device.cmd_set_viewport(
+                    self.command_buffers[self.current_frame],
+                    0,
+                    &[viewport],
+                );
+            }
+            let scissor = vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: vk::Extent2D {
+                    width: self.screen_rect.w as u32,
+                    height: self.screen_rect.h as u32,
+                },
+            };
+            unsafe {
+                self.device.cmd_set_scissor(
+                    self.command_buffers[self.current_frame],
+                    0,
+                    &[scissor],
+                );
+            }
+        }
+        // Bind our pipeline
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                self.command_buffers[self.current_frame],
+                vk::PipelineBindPoint::Graphics,
+                self.graphics_pipeline,
+            );
         }
         Ok(())
     }
