@@ -765,13 +765,10 @@ impl GraphicsContext {
                 src_color_blend_factor: vk::BlendFactor::SrcAlpha,
                 dst_color_blend_factor: vk::BlendFactor::OneMinusSrcAlpha,
                 color_blend_op: vk::BlendOp::Add,
-                src_alpha_blend_factor: vk::BlendFactor::SrcAlpha,
-                dst_alpha_blend_factor: vk::BlendFactor::OneMinusSrcAlpha,
+                src_alpha_blend_factor: vk::BlendFactor::One,
+                dst_alpha_blend_factor: vk::BlendFactor::Zero,
                 alpha_blend_op: vk::BlendOp::Add,
-                color_write_mask: vk::COLOR_COMPONENT_R_BIT
-                    | vk::COLOR_COMPONENT_G_BIT
-                    | vk::COLOR_COMPONENT_B_BIT
-                    | vk::COLOR_COMPONENT_A_BIT,
+                color_write_mask: vk::ColorComponentFlags::all(),
             }];
             let color_blend_state = vk::PipelineColorBlendStateCreateInfo {
                 s_type: vk::StructureType::PipelineColorBlendStateCreateInfo,
