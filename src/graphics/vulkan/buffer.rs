@@ -132,6 +132,54 @@ where
         Ok(buffer)
     }
 
+    pub fn staging(
+        device: &Device<V1_0>,
+        pdevice_memory_props: &vk::PhysicalDeviceMemoryProperties,
+        queue: vk::Queue,
+        command_pool: vk::CommandPool,
+        data: &[T],
+        usage: vk::BufferUsageFlags,
+    ) -> GameResult<Self> {
+        let staging_buffer = Buffer::new(
+            device,
+            pdevice_memory_props,
+            data,
+            vk::BUFFER_USAGE_TRANSFER_SRC_BIT,
+            vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        )?;
+        let buffer = Buffer::empty(
+            device,
+            pdevice_memory_props,
+            staging_buffer.size(),
+            usage | vk::BUFFER_USAGE_TRANSFER_DST_BIT,
+            vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        )?;
+        vulkan::single_time_commands(
+            device,
+            queue,
+            command_pool,
+            &[],
+            &[],
+            &[],
+            |device, command_buffer| {
+                let region = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: staging_buffer.size(),
+                };
+                unsafe {
+                    device.cmd_copy_buffer(
+                        command_buffer,
+                        staging_buffer.handle(),
+                        buffer.handle(),
+                        &[region],
+                    );
+                }
+            },
+        )?;
+        Ok(buffer)
+    }
+
     pub fn update(&mut self, data: &[T]) -> GameResult {
         if data.len() != self.count {
             unsafe {
