@@ -1038,7 +1038,7 @@ impl GraphicsContext {
         vertex_buffer: &vulkan::Buffer<Vertex>,
         index_buffer: &vulkan::Buffer<u16>,
     ) -> GameResult {
-            unsafe {
+        unsafe {
             self.device.cmd_bind_descriptor_sets(
                 self.command_buffers[self.current_frame],
                 vk::PipelineBindPoint::Graphics,
