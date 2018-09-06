@@ -253,11 +253,12 @@ impl GraphicsContext {
             surface_loader.get_physical_device_surface_formats_khr(pdevice, surface)?;
         let surface_format = surface_formats
             .iter()
-            .map(|f| match (f.format, f.color_space) {
-                (vk::Format::R8g8b8a8Srgb, vk::ColorSpaceKHR::SrgbNonlinear) => f,
-                (_, vk::ColorSpaceKHR::SrgbNonlinear) => f,
+            // TODO: Srgb based on whether it's requested or not
+            .max_by_key(|f| match f.format {
+                vk::Format::R8g8b8a8Srgb => 2,
+                vk::Format::R8g8b8a8Snorm => 1,
+                _ => 0,
             })
-            .next()
             .unwrap();
         println!("Using surface format: {:?}", surface_format);
 
