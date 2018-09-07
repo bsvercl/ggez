@@ -9,6 +9,8 @@ use std::mem;
 use std::ptr;
 use GameResult;
 
+// TODO: Buffers are being dropped before being rendered.
+// This could be solved by having proper Vulkan memory management.
 #[derive(Clone)]
 pub struct Buffer<T>
 where
