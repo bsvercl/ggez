@@ -191,26 +191,36 @@ impl GraphicsContext {
             Surface::new(&entry, &instance).expect("Failed to load surface extension");
         let surface = vulkan::create_surface(&entry, &instance, &window)?;
 
-        let pdevices = instance.enumerate_physical_devices()?;
-        let pdevice = pdevices.iter().cloned().next().unwrap();
-        let graphics_queue_family_index = instance
-            .get_physical_device_queue_family_properties(pdevice)
-            .iter()
-            .enumerate()
-            .map(|(index, props)| {
-                if props.queue_flags.subset(vk::QUEUE_GRAPHICS_BIT)
-                    && surface_loader.get_physical_device_surface_support_khr(
-                        pdevice,
-                        index as u32,
-                        surface,
-                    ) {
-                    return index;
-                } else {
-                    panic!("No matching devices");
-                }
-            })
-            .next()
-            .unwrap();
+        let (pdevice, graphics_queue_family_index) = {
+            instance
+                .enumerate_physical_devices()?
+                .iter()
+                .map(|&pdevice| {
+                    instance
+                        .get_physical_device_queue_family_properties(pdevice)
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, ref info)| {
+                            let supports_graphics_and_surface =
+                                info.queue_flags.subset(vk::QUEUE_GRAPHICS_BIT)
+                                    && surface_loader.get_physical_device_surface_support_khr(
+                                        pdevice,
+                                        index as u32,
+                                        surface,
+                                    );
+                            if supports_graphics_and_surface {
+                                Some((pdevice, index))
+                            } else {
+                                None
+                            }
+                        })
+                        .nth(0)
+                })
+                .filter_map(|v| v)
+                .nth(0)
+                // TODO: Replace this
+                .unwrap()
+        };
 
         let pdevice_memory_props = instance.get_physical_device_memory_properties(pdevice);
 
@@ -443,7 +453,7 @@ impl GraphicsContext {
             let create_info = vk::DescriptorPoolCreateInfo {
                 s_type: vk::StructureType::DescriptorPoolCreateInfo,
                 p_next: ptr::null(),
-                flags: vk::DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+                flags: vk::DescriptorPoolCreateFlags::empty(),
                 max_sets: 1,
                 pool_size_count: pool_sizes.len() as u32,
                 p_pool_sizes: pool_sizes.as_ptr(),
@@ -543,8 +553,8 @@ impl GraphicsContext {
 
         let framebuffers = swapchain_image_views
             .iter()
-            .map(|&image_view| {
-                let attachments = [image_view];
+            .map(|&swapchain_image_view| {
+                let attachments = [swapchain_image_view];
                 let create_info = vk::FramebufferCreateInfo {
                     s_type: vk::StructureType::FramebufferCreateInfo,
                     p_next: ptr::null(),
