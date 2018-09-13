@@ -1,4 +1,5 @@
 use graphics::*;
+use std::ops::Mul;
 
 use mint;
 
@@ -218,18 +219,17 @@ impl From<DrawParam> for DrawTransform {
     }
 }
 
-impl DrawTransform {
-    /// Returns a new `PrimitiveDrawParam` with its matrix multiplied
-    /// by the given one.
-    ///
-    /// TODO: Make some way to implement `matrix * self.matrix`, or just implement `Mul`...
-    pub fn mul(self, matrix: Matrix4) -> Self {
+impl Mul for DrawTransform {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
         DrawTransform {
-            matrix: self.matrix * matrix,
+            matrix: self.matrix * rhs.matrix,
             ..self
         }
     }
+}
 
+impl DrawTransform {
     pub(crate) fn to_instance_properties(&self, srgb: bool) -> InstanceProperties {
         let mat: [[f32; 4]; 4] = self.matrix.into();
         let color: [f32; 4] = if srgb {
