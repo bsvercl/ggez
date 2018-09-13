@@ -173,8 +173,7 @@ pub fn main() -> GameResult {
             WindowMode::default()
                 .dimensions(640.0, 480.0)
                 .resizable(true),
-        )
-        .build()?;
+        ).build()?;
 
     trace!("Context created, creating a file logger.");
 

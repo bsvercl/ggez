@@ -215,8 +215,7 @@ pub fn main() -> GameResult {
             WindowMode::default()
                 .dimensions(640.0, 480.0)
                 .resizable(true),
-        )
-        .add_resource_path(resource_dir)
+        ).add_resource_path(resource_dir)
         .build()?;
 
     let state = &mut App::new(ctx)?;

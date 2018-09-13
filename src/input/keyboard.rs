@@ -214,8 +214,7 @@ impl KeyboardContext {
                 } else {
                     None
                 }
-            })
-            .collect()
+            }).collect()
     }
 
     pub(crate) fn active_mods(&self) -> KeyMods {

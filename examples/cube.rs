@@ -166,8 +166,7 @@ void main() {
                 texture::Kind::D2(1, 1, texture::AaMode::Single),
                 texture::Mipmap::Provided,
                 &[&texels],
-            )
-            .unwrap();
+            ).unwrap();
 
         let sinfo =
             texture::SamplerInfo::new(texture::FilterMethod::Bilinear, texture::WrapMode::Clamp);

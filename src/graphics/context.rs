@@ -300,8 +300,7 @@ impl GraphicsContext {
                     } else {
                         pm == vk::PresentModeKHR::Immediate
                     }
-                })
-                .unwrap_or(vk::PresentModeKHR::Fifo);
+                }).unwrap_or(vk::PresentModeKHR::Fifo);
             println!("Using present mode: {:?}", present_mode);
 
             let create_info = vk::SwapchainCreateInfoKHR {
@@ -354,8 +353,7 @@ impl GraphicsContext {
                     },
                 };
                 unsafe { device.create_image_view(&create_info, None).unwrap() }
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         let command_pool = {
             let create_info = vk::CommandPoolCreateInfo {
@@ -389,15 +387,13 @@ impl GraphicsContext {
                     device
                         .create_semaphore(&semaphore_create_info, None)
                         .unwrap()
-                })
-                .collect::<Vec<_>>();
+                }).collect::<Vec<_>>();
             let rendering_complete_semaphores = (0..image_count)
                 .map(|_| unsafe {
                     device
                         .create_semaphore(&semaphore_create_info, None)
                         .unwrap()
-                })
-                .collect::<Vec<_>>();
+                }).collect::<Vec<_>>();
 
             let fence_create_info = vk::FenceCreateInfo {
                 s_type: vk::StructureType::FenceCreateInfo,
@@ -567,8 +563,7 @@ impl GraphicsContext {
                     layers: 1,
                 };
                 unsafe { device.create_framebuffer(&create_info, None).unwrap() }
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         let graphics_pipeline_layout = {
             let create_info = vk::PipelineLayoutCreateInfo {
